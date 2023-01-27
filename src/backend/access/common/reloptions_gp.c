@@ -888,8 +888,18 @@ validate_and_adjust_options(StdRdOptions *result,
 		result->checksum = checksum_opt->values.bool_val;
 	}
 
-	if (result->compresstype[0] &&
-		result->compresslevel == AO_DEFAULT_COMPRESSLEVEL)
+	/* More adjustment for compression settings: */
+	/*
+	 * use the default compressor if compresslevel was indicated but not
+	 * compresstype. must make a copy otherwise str_tolower below will
+	 * crash.
+	 */
+	if (result->compresslevel > 0 && !result->compresstype[0])
+		strlcpy(result->compresstype, AO_DEFAULT_USABLE_COMPRESSTYPE, sizeof(result->compresstype));
+	/*
+	 * use compresslevel=1 if the compresstype is not none
+	 */
+	if (result->compresstype[0] && result->compresslevel == 0)
 	{
 		result->compresslevel = setDefaultCompressionLevel(result->compresstype);
 	}
@@ -1055,9 +1065,9 @@ static int
 setDefaultCompressionLevel(char *compresstype)
 {
 	if (!compresstype || pg_strcasecmp(compresstype, "none") == 0)
-		return 0;
+		return AO_DEFAULT_COMPRESSLEVEL;
 	else
-		return 1;
+		return AO_DEFAULT_USABLE_COMPRESSLEVEL;
 }
 
 void
@@ -1196,7 +1206,7 @@ fillin_encoding(List *aocoColumnEncoding)
 			}
 			else
 			{
-				arg = AO_DEFAULT_COMPRESSTYPE;
+				arg = AO_DEFAULT_USABLE_COMPRESSTYPE;
 			}
 			el = makeDefElem("compresstype", (Node *) makeString(arg), -1);
 			retList = lappend(retList, el);
