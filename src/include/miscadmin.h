@@ -594,6 +594,8 @@ extern void CancelBackup(void);
 extern size_t get_hash_memory_limit(void);
 extern int	get_hash_mem(void);
 
+extern bool should_reject_connection;
+
 /*
  * In GPDB, some utility commands may execute nested in another utilities,
  * while the inner utility may still dispatch the command to QEs, which is
@@ -637,6 +639,5 @@ extern void GpRecoveryFromError(void);
 #define CLEAR_DISPATCH()	do { \
 	dispatch_nest_level = 0; \
 } while(0)
-
 
 #endif							/* MISCADMIN_H */
