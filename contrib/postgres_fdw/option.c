@@ -250,6 +250,8 @@ InitPgFdwOptions(void)
 		{"sslcert", UserMappingRelationId, true},
 		{"sslkey", UserMappingRelationId, true},
 
+		/* num_segments is available on server only */
+		{"num_segments", ForeignServerRelationId, false},
 		{NULL, InvalidOid, false}
 	};
 

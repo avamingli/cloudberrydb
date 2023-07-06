@@ -126,10 +126,23 @@ CREATE FOREIGN TABLE gp_ft1 (
 -- validate parallel writes (mpp_execute set to all segments)
 -- ===================================================================
 
+EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM gp_ft1;
 EXPLAIN (COSTS FALSE) INSERT INTO gp_ft1 SELECT * FROM table_dist_rand;
 INSERT INTO gp_ft1 SELECT * FROM table_dist_rand;
 SELECT * FROM postgres_fdw_gp."GP 1" ORDER BY f1;
 TRUNCATE TABLE postgres_fdw_gp."GP 1";
+
+\c
+set search_path=postgres_fdw_gp;
+alter server loopback options(add num_segments '2');
+EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM gp_ft1;
+EXPLAIN (COSTS FALSE) INSERT INTO gp_ft1 SELECT * FROM table_dist_rand;
+INSERT INTO gp_ft1 SELECT * FROM table_dist_rand;
+SELECT * FROM postgres_fdw_gp."GP 1" ORDER BY f1;
+TRUNCATE TABLE postgres_fdw_gp."GP 1";
+alter server loopback options(drop num_segments);
+\c
+set search_path=postgres_fdw_gp;
 
 EXPLAIN (COSTS FALSE) INSERT INTO gp_ft1 SELECT * FROM table_dist_repl;
 INSERT INTO gp_ft1 SELECT * FROM table_dist_repl;
