@@ -39,6 +39,7 @@
 #include "catalog/storage_tablespace.h"
 #include "catalog/storage_database.h"
 #include "commands/async.h"
+#include "commands/matview.h"
 #include "commands/dbcommands.h"
 #include "commands/extension.h"
 #include "commands/resgroupcmds.h"
@@ -2827,6 +2828,7 @@ CommitTransaction(void)
 	if ((Gp_role == GP_ROLE_DISPATCH || IS_SINGLENODE()) && IsResQueueEnabled())
 		AtCommit_ResScheduler();
 
+	AtEOXact_IVM(true);
 	/*
 	 * Let ON COMMIT management do its thing (must happen after closing
 	 * cursors, to avoid dangling-reference problems)
@@ -3156,6 +3158,8 @@ PrepareTransaction(void)
 
 	/* Shut down the deferred-trigger manager */
 	AfterTriggerEndXact(true);
+	/* Just after clean up triggers */
+	AtEOXact_IVM(true);
 
 	/*
 	 * Let ON COMMIT management do its thing (must happen after closing
@@ -3565,6 +3569,7 @@ AbortTransaction(void)
 	AtAbort_Notify();
 	AtEOXact_RelationMap(false, is_parallel_worker);
 	AtAbort_Twophase();
+	AtAbort_IVM();
 
 	/*
 	 * Advertise the fact that we aborted in pg_xact (assuming that we got as
@@ -6151,6 +6156,9 @@ AbortSubTransaction(void)
 	pgstat_progress_end_command();
 	AbortBufferIO();
 	UnlockBuffers();
+
+	/* Clean up hash entries for incremental view maintenance */
+	AtAbort_IVM();
 
 	/* Reset WAL record construction state */
 	XLogResetInsertion();
