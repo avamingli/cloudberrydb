@@ -6587,3 +6587,57 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (2 rows)
 
 drop table test_listPartition;
+-- test guc gp_max_partition_level
+drop table p3_sales;
+ERROR:  table "p3_sales" does not exist
+set gp_max_partition_level = 2;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+ SUBPARTITION BY RANGE (month)
+  SUBPARTITION TEMPLATE (
+    START (1) END (3) EVERY (1),
+    DEFAULT SUBPARTITION other_months )
+    SUBPARTITION BY LIST (region)
+      SUBPARTITION TEMPLATE (
+       SUBPARTITION usa VALUES ('usa'),
+       SUBPARTITION europe VALUES ('europe'),
+       DEFAULT SUBPARTITION other_regions )
+( START (2010) END (2012) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+ERROR:  Exceeds maximum configured partitioning level of 2
+set gp_max_partition_level = 3;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+ SUBPARTITION BY RANGE (month)
+  SUBPARTITION TEMPLATE (
+    START (1) END (3) EVERY (1),
+    DEFAULT SUBPARTITION other_months )
+    SUBPARTITION BY LIST (region)
+      SUBPARTITION TEMPLATE (
+       SUBPARTITION usa VALUES ('usa'),
+       SUBPARTITION europe VALUES ('europe'),
+       DEFAULT SUBPARTITION other_regions )
+( START (2010) END (2012) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+drop table p3_sales;
+set gp_max_partition_level = 0;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+ SUBPARTITION BY RANGE (month)
+  SUBPARTITION TEMPLATE (
+    START (1) END (3) EVERY (1),
+    DEFAULT SUBPARTITION other_months )
+    SUBPARTITION BY LIST (region)
+      SUBPARTITION TEMPLATE (
+       SUBPARTITION usa VALUES ('usa'),
+       SUBPARTITION europe VALUES ('europe'),
+       DEFAULT SUBPARTITION other_regions )
+( START (2010) END (2012) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+drop table p3_sales;

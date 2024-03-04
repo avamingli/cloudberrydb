@@ -4159,3 +4159,59 @@ explain (costs off) select d from test_listPartition where d='2022-10-23' or d=(
 select d from test_listPartition where d='2022-10-23' or d=('2022-10-23'::date -interval '1 day');
 
 drop table test_listPartition;
+-- test guc gp_max_partition_level
+drop table p3_sales;
+set gp_max_partition_level = 2;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+ SUBPARTITION BY RANGE (month)
+  SUBPARTITION TEMPLATE (
+    START (1) END (3) EVERY (1),
+    DEFAULT SUBPARTITION other_months )
+    SUBPARTITION BY LIST (region)
+      SUBPARTITION TEMPLATE (
+       SUBPARTITION usa VALUES ('usa'),
+       SUBPARTITION europe VALUES ('europe'),
+       DEFAULT SUBPARTITION other_regions )
+( START (2010) END (2012) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+
+set gp_max_partition_level = 3;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+ SUBPARTITION BY RANGE (month)
+  SUBPARTITION TEMPLATE (
+    START (1) END (3) EVERY (1),
+    DEFAULT SUBPARTITION other_months )
+    SUBPARTITION BY LIST (region)
+      SUBPARTITION TEMPLATE (
+       SUBPARTITION usa VALUES ('usa'),
+       SUBPARTITION europe VALUES ('europe'),
+       DEFAULT SUBPARTITION other_regions )
+( START (2010) END (2012) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+
+drop table p3_sales;
+
+set gp_max_partition_level = 0;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+ SUBPARTITION BY RANGE (month)
+  SUBPARTITION TEMPLATE (
+    START (1) END (3) EVERY (1),
+    DEFAULT SUBPARTITION other_months )
+    SUBPARTITION BY LIST (region)
+      SUBPARTITION TEMPLATE (
+       SUBPARTITION usa VALUES ('usa'),
+       SUBPARTITION europe VALUES ('europe'),
+       DEFAULT SUBPARTITION other_regions )
+( START (2010) END (2012) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+
+drop table p3_sales;
