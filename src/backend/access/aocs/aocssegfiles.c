@@ -1466,7 +1466,6 @@ gp_aocsseg_history(PG_FUNCTION_ARGS)
 		aocsRel = heap_open(aocsRelOid, AccessShareLock);
 		if (!RelationIsAoCols(aocsRel))
 		{
-			heap_close(aocsRel, AccessShareLock);
 			ereport(ERROR,
 			        (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				        errmsg("'%s' is not an append-only columnar relation",
