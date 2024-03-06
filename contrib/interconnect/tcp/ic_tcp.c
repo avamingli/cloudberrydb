@@ -2889,10 +2889,6 @@ RecvTupleChunkFromAnyTCP(ChunkTransportState * transportStates,
 
 		}
 
-		/*
-		 * GPDB_12_MERGE_FIXME: should use WaitEventSetWait() instead of
-		 * select()
-		 */
 		/* follow the routine in ic_udpifc.c */
 		/**
 		 * Notice that: ic-proxy won't get any tuple if ic_proxy_addrs is empty
