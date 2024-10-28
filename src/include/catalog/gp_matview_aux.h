@@ -67,4 +67,6 @@ extern bool MatviewUsableForAppendAgg(Oid mvoid);
 
 extern bool MatviewIsGeneralyUpToDate(Oid mvoid);
 
+extern bool MatviewIsUpToDate(Oid mvoid);
+
 #endif			/* GP_MATVIEW_AUX_H */

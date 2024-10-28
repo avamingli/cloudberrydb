@@ -462,3 +462,16 @@ MatviewIsGeneralyUpToDate(Oid mvoid)
 	return ((auxform->datastatus == MV_DATA_STATUS_UP_TO_DATE) || 
 			(auxform->datastatus == MV_DATA_STATUS_UP_REORGANIZED));
 }
+
+bool
+MatviewIsUpToDate(Oid mvoid)
+{
+	HeapTuple mvauxtup = SearchSysCacheCopy1(MVAUXOID, ObjectIdGetDatum(mvoid));
+
+	/* Not a candidate we recorded. */
+	if (!HeapTupleIsValid(mvauxtup))
+		return false;
+
+	Form_gp_matview_aux auxform = (Form_gp_matview_aux) GETSTRUCT(mvauxtup);
+	return (auxform->datastatus == MV_DATA_STATUS_UP_TO_DATE);
+}
