@@ -221,39 +221,63 @@ INSERT INTO ext_w SELECT * FROM generate_series(1, 10);
 CREATE READABLE EXTERNAL TABLE ext_r(id int)
     LOCATION('demoprot://dynamic_table_text_file.txt') 
 FORMAT 'text';
-SELECT * FROM ext_r;
- id 
-----
-  5
-  6
-  9
- 10
-  2
-  3
-  4
-  7
-  8
-  1
-(10 rows)
+EXPLAIN(COSTS OFF, VERBOSE)
+SELECT sum(id) FROM ext_r where id > 5;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: sum(id)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL sum(id))
+         ->  Partial Aggregate
+               Output: PARTIAL sum(id)
+               ->  Foreign Scan on dynamic_table_schema.ext_r
+                     Output: id
+                     Filter: (ext_r.id > 5)
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+SELECT sum(id) FROM ext_r where id > 5;
+ sum 
+-----
+  40
+(1 row)
 
 CREATE DYNAMIC TABLE dt_external  AS
-  SELECT * FROM ext_r;
+  SELECT * FROM ext_r where id > 5;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Cloudberry Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SELECT * FROM dt_external;
- id 
-----
-  2
-  3
-  4
-  7
-  8
-  1
-  5
-  6
-  9
- 10
+ANALYZE dt_external;
+SHOW optimizer;
+ optimizer 
+-----------
+ off
+(1 row)
+
+SET LOCAL enable_answer_query_using_materialized_views = ON;
+SET LOCAL aqumv_allow_foreign_table = ON;
+EXPLAIN(COSTS OFF, VERBOSE)
+SELECT sum(id) FROM ext_r where id > 5;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: sum(id)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL sum(id))
+         ->  Partial Aggregate
+               Output: PARTIAL sum(id)
+               ->  Seq Scan on dynamic_table_schema.dt_external
+                     Output: id
+ Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
+ Optimizer: Postgres query optimizer
 (10 rows)
+
+SELECT sum(id) FROM ext_r where id > 5;
+ sum 
+-----
+  40
+(1 row)
 
 DROP FOREIGN TABLE ext_r CASCADE;
 NOTICE:  drop cascades to dynamic table dt_external

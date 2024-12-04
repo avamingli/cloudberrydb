@@ -98,12 +98,23 @@ INSERT INTO ext_w SELECT * FROM generate_series(1, 10);
 CREATE READABLE EXTERNAL TABLE ext_r(id int)
     LOCATION('demoprot://dynamic_table_text_file.txt') 
 FORMAT 'text';
-SELECT * FROM ext_r;
+
+EXPLAIN(COSTS OFF, VERBOSE)
+SELECT sum(id) FROM ext_r where id > 5;
+SELECT sum(id) FROM ext_r where id > 5;
 
 CREATE DYNAMIC TABLE dt_external  AS
-  SELECT * FROM ext_r;
+  SELECT * FROM ext_r where id > 5;
 
-SELECT * FROM dt_external;
+ANALYZE dt_external;
+
+SHOW optimizer;
+SET LOCAL enable_answer_query_using_materialized_views = ON;
+SET LOCAL aqumv_allow_foreign_table = ON;
+
+EXPLAIN(COSTS OFF, VERBOSE)
+SELECT sum(id) FROM ext_r where id > 5;
+SELECT sum(id) FROM ext_r where id > 5;
 DROP FOREIGN TABLE ext_r CASCADE;
 DROP FOREIGN TABLE ext_w;
 ABORT;
