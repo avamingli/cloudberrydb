@@ -1121,6 +1121,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"DICTIONARY", Query_for_list_of_ts_dictionaries, NULL, NULL, THING_NO_SHOW},
 	{"DIRECTORY TABLE", NULL, NULL, &Query_for_list_of_directory_tables},
 	{"DOMAIN", NULL, NULL, &Query_for_list_of_domains},
+	{"DYNAMIC TABLE", NULL, NULL, &Query_for_list_of_matviews, THING_NO_ALTER},
 	{"EVENT TRIGGER", NULL, NULL, NULL},
 	{"EXTENSION", Query_for_list_of_extensions},
 	{"FOREIGN DATA WRAPPER", NULL, NULL, NULL},
@@ -1573,7 +1574,7 @@ psql_completion(const char *text, int start, int end)
 		"DELETE FROM", "DISCARD", "DO", "DROP", "END", "EXECUTE", "EXPLAIN",
 		"FETCH", "GRANT", "IMPORT FOREIGN SCHEMA", "INSERT INTO", "LISTEN", "LOAD", "LOCK",
 		"MOVE", "NOTIFY", "PREPARE",
-		"REASSIGN", "REFRESH MATERIALIZED VIEW", "REINDEX", "RELEASE",
+		"REASSIGN", "REFRESH MATERIALIZED VIEW", "REFRESH DYNAMIC TABLE", "REINDEX", "RELEASE",
 		"RESET", "REVOKE", "ROLLBACK",
 		"SAVEPOINT", "SECURITY LABEL", "SELECT", "SET", "SHOW", "START",
 		"TABLE", "TRUNCATE", "UNLISTEN", "UPDATE", "VACUUM", "VALUES", "WITH",
@@ -2480,7 +2481,7 @@ psql_completion(const char *text, int start, int end)
 					  "FOREIGN DATA WRAPPER", "FOREIGN TABLE", "SERVER",
 					  "INDEX", "LANGUAGE", "POLICY", "PUBLICATION", "RULE",
 					  "SCHEMA", "SEQUENCE", "STATISTICS", "SUBSCRIPTION",
-					  "TABLE", "TYPE", "VIEW", "MATERIALIZED VIEW",
+					  "TABLE", "TYPE", "VIEW", "MATERIALIZED VIEW", "DYNAMIC TABLE",
 					  "COLUMN", "AGGREGATE", "FUNCTION", "STORAGE SERVER",
 					  "PROCEDURE", "PROFILE", "ROUTINE",
 					  "OPERATOR", "TRIGGER", "CONSTRAINT", "DOMAIN",
@@ -2849,7 +2850,7 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("SEQUENCE", "TABLE", "VIEW");
 	/* Complete "CREATE UNLOGGED" with TABLE or MATVIEW */
 	else if (TailMatches("CREATE", "UNLOGGED"))
-		COMPLETE_WITH("TABLE", "MATERIALIZED VIEW", "INCREMENTAL MATERIALIZED VIEW");
+		COMPLETE_WITH("TABLE", "MATERIALIZED VIEW", "INCREMENTAL MATERIALIZED VIEW", "DYNAMIC TABLE");
 	/* Complete PARTITION BY with RANGE ( or LIST ( or ... */
 	else if (TailMatches("PARTITION", "BY"))
 		COMPLETE_WITH("RANGE (", "LIST (", "HASH (");
@@ -3199,6 +3200,21 @@ psql_completion(const char *text, int start, int end)
 			 Matches("CREATE", "INCREMENTAL", "MATERIALIZED", "VIEW", MatchAny, "AS"))
 		COMPLETE_WITH("SELECT");
 
+/* CREATE DYNAMIC TABLE */
+	else if (Matches("CREATE", "DYNAMIC"))
+		COMPLETE_WITH("TABLE");
+	/* Complete CREATE DYNAMIC TABLE <name> with AS  */
+	/* Complete CREATE DYNAMIC TABLE <name> SCHEDULE <schedule> with AS  */
+	else if (Matches("CREATE", "DYNAMIC", "TABLE", MatchAny))
+		COMPLETE_WITH("SCHEDULE", "AS");
+	else if (Matches("CREATE", "DYNAMIC", "TABLE", MatchAny, "SCHEDULE", MatchAny))
+		COMPLETE_WITH("AS");
+	/* Complete "CREATE DYNAMIC TABLE <sth> AS with "SELECT" */
+	/* Complete "CREATE DYNAMIC TABLE <sth> SCHEDULE <schedule> AS with "SELECT" */
+	else if (Matches("CREATE", "DYNAMIC", "TABLE", MatchAny, "AS") ||
+			 Matches("CREATE", "DYNAMIC", "TABLE", MatchAny, "SCHEDULE", MatchAny,"AS"))
+		COMPLETE_WITH("SELECT");
+
 /* CREATE EVENT TRIGGER */
 	else if (Matches("CREATE", "EVENT"))
 		COMPLETE_WITH("TRIGGER");
@@ -3340,6 +3356,12 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("DROP", "MATERIALIZED"))
 		COMPLETE_WITH("VIEW");
 	else if (Matches("DROP", "MATERIALIZED", "VIEW"))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_matviews, NULL);
+
+	/* DROP DYNAMIC TABLE */
+	else if (Matches("DROP", "DYNAMIC"))
+		COMPLETE_WITH("TABLE");
+	else if (Matches("DROP", "DYNAMIC", "TABLE"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_matviews, NULL);
 
 	/* DROP STORAGE */
@@ -3825,7 +3847,7 @@ psql_completion(const char *text, int start, int end)
 
 /* REFRESH MATERIALIZED VIEW */
 	else if (Matches("REFRESH"))
-		COMPLETE_WITH("MATERIALIZED VIEW");
+		COMPLETE_WITH("MATERIALIZED VIEW", "DYNAMIC TABLE");
 	else if (Matches("REFRESH", "MATERIALIZED"))
 		COMPLETE_WITH("VIEW");
 	else if (Matches("REFRESH", "MATERIALIZED", "VIEW"))
@@ -3844,6 +3866,27 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("REFRESH", "MATERIALIZED", "VIEW", MatchAny, "WITH", "NO"))
 		COMPLETE_WITH("DATA");
 	else if (Matches("REFRESH", "MATERIALIZED", "VIEW", "CONCURRENTLY", MatchAny, "WITH", "NO"))
+		COMPLETE_WITH("DATA");
+
+/* REFRESH DYNAMIC TABLE */
+	else if (Matches("REFRESH", "DYNAMIC"))
+		COMPLETE_WITH("TABLE");
+	else if (Matches("REFRESH", "DYNAMIC", "TABLE"))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_matviews,
+								   " UNION SELECT 'CONCURRENTLY'");
+	else if (Matches("REFRESH", "DYNAMIC", "TABLE", "CONCURRENTLY"))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_matviews, NULL);
+	else if (Matches("REFRESH", "DYNAMIC", "TABLE", MatchAny))
+		COMPLETE_WITH("WITH");
+	else if (Matches("REFRESH", "DYNAMIC", "TABLE", "CONCURRENTLY", MatchAny))
+		COMPLETE_WITH("WITH");
+	else if (Matches("REFRESH", "DYNAMIC", "TABLE", MatchAny, "WITH"))
+		COMPLETE_WITH("NO DATA", "DATA");
+	else if (Matches("REFRESH", "DYNAMIC", "TABLE", "CONCURRENTLY", MatchAny, "WITH"))
+		COMPLETE_WITH("NO DATA", "DATA");
+	else if (Matches("REFRESH", "DYNAMIC", "TABLE", MatchAny, "WITH", "NO"))
+		COMPLETE_WITH("DATA");
+	else if (Matches("REFRESH", "DYNAMIC", "TABLE", "CONCURRENTLY", MatchAny, "WITH", "NO"))
 		COMPLETE_WITH("DATA");
 
 /* REINDEX */
