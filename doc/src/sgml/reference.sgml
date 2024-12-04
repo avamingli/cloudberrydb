@@ -93,6 +93,7 @@
    &createConversion;
    &createDatabase;
    &createDomain;
+   &createDynamicTable;
    &createEventTrigger;
    &createExtension;
    &createForeignDataWrapper;
@@ -140,6 +141,7 @@
    &dropConversion;
    &dropDatabase;
    &dropDomain;
+   &dropDynamicTable;
    &dropEventTrigger;
    &dropExtension;
    &dropForeignDataWrapper;
@@ -191,6 +193,7 @@
    &prepare;
    &prepareTransaction;
    &reassignOwned;
+   &refreshDynamicTable;
    &refreshMaterializedView;
    &reindex;
    &releaseSavepoint;

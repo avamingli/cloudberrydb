@@ -1,0 +1,142 @@
+<!--
+doc/src/sgml/ref/refresh_dynamic_table.sgml
+PostgreSQL documentation
+-->
+
+<refentry id="sql-refreshdynamictable">
+ <indexterm zone="sql-refreshdynamictable">
+  <primary>REFRESH DYNAMIC TABLE</primary>
+ </indexterm>
+
+ <refmeta>
+  <refentrytitle>REFRESH DYNAMIC TABLE</refentrytitle>
+  <manvolnum>7</manvolnum>
+  <refmiscinfo>SQL - Language Statements</refmiscinfo>
+ </refmeta>
+
+ <refnamediv>
+  <refname>REFRESH DYNAMIC TABLE</refname>
+  <refpurpose>replace the contents of a dynamic table</refpurpose>
+ </refnamediv>
+
+ <refsynopsisdiv>
+<synopsis>
+REFRESH DYNAMIC TABLE [ CONCURRENTLY ] <replaceable class="parameter">name</replaceable>
+    [ WITH [ NO ] DATA ]
+</synopsis>
+ </refsynopsisdiv>
+
+ <refsect1>
+  <title>Description</title>
+
+  <para>
+   <command>REFRESH DYNAMIC TABLE</command> completely replaces the
+   contents of a dynamic table.  To execute this command you must be the
+   owner of the dynamic table.  The old contents are discarded.  If
+   <literal>WITH DATA</literal> is specified (or defaults) the backing query
+   is executed to provide the new data, and the dynamic table is left in a
+   scannable state. If <literal>WITH NO DATA</literal> is specified no new
+   data is generated and the dynamic table is left in an unscannable
+   state.  If the view is IMMV, the triggers are dropped.
+  </para>
+  <para>
+   <literal>CONCURRENTLY</literal> and <literal>WITH NO DATA</literal> may not
+   be specified together.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>Parameters</title>
+
+  <variablelist>
+   <varlistentry>
+    <term><literal>CONCURRENTLY</literal></term>
+    <listitem>
+     <para>
+      Refresh the dynamic table without locking out concurrent selects on
+      the dynamic table.  Without this option a refresh which affects a
+      lot of rows will tend to use fewer resources and complete more quickly,
+      but could block other connections which are trying to read from the
+      dynamic table.  This option may be faster in cases where a small
+      number of rows are affected.
+     </para>
+     <para>
+      This option is only allowed if there is at least one
+      <literal>UNIQUE</literal> index on the dynamic table which uses only
+      column names and includes all rows;  that is, it must not be an
+      expression index or include a <literal>WHERE</literal> clause.
+     </para>
+     <para>
+      This option may not be used when the dynamic table is not already
+      populated.
+     </para>
+     <para>
+      Even with this option only one <literal>REFRESH</literal> at a time may
+      run against any one dynamic table.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">name</replaceable></term>
+    <listitem>
+     <para>
+      The name (optionally schema-qualified) of the dynamic table to
+      refresh.
+     </para>
+    </listitem>
+   </varlistentry>
+  </variablelist>
+ </refsect1>
+
+ <refsect1>
+  <title>Notes</title>
+
+  <para>
+   If there is an <literal>ORDER BY</literal> clause in the dynamic
+   table's defining query, the original contents of the dynamic table
+   will be ordered that way; but <command>REFRESH DYNAMIC
+   TABLE</command> does not guarantee to preserve that ordering.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>Examples</title>
+
+  <para>
+   This command will replace the contents of the dynamic table called
+   <literal>order_summary</literal> using the query from the dynamic 
+   table's definition, and leave it in a scannable state:
+<programlisting>
+REFRESH DYNAMIC TABLE order_summary;
+</programlisting>
+  </para>
+
+  <para>
+   This command will free storage associated with the dynamic table
+   <literal>annual_statistics_basis</literal> and leave it in an unscannable
+   state:
+<programlisting>
+REFRESH DYNAMIC TABLE annual_statistics_basis WITH NO DATA;
+</programlisting></para>
+ </refsect1>
+
+ <refsect1>
+  <title>Compatibility</title>
+
+  <para>
+   <command>REFRESH DYNAMIC TABLE</command> is a
+   <productname>Cloudberry</productname> extension.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>See Also</title>
+
+  <simplelist type="inline">
+   <member><xref linkend="sql-createdynamictable"/></member>
+   <member><xref linkend="sql-dropdynamictable"/></member>
+  </simplelist>
+ </refsect1>
+
+</refentry>
