@@ -398,6 +398,7 @@ typedef struct _tableInfo
 	int			numTriggers;	/* number of triggers for table */
 	struct _triggerInfo *triggers;	/* array of TriggerInfo structs */
 	bool		isivm;		 	/* is incrementally maintainable materialized view? */
+	bool		isdynamic;		/* is dynamic table? */
 } TableInfo;
 
 typedef struct _tableAttachInfo
