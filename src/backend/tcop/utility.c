@@ -3281,8 +3281,14 @@ CreateCommandTag(Node *parsetree)
 					tag = CMDTAG_DROP_VIEW;
 					break;
 				case OBJECT_MATVIEW:
-					tag = CMDTAG_DROP_MATERIALIZED_VIEW;
+				{
+					if (((DropStmt *) parsetree)->isdynamic)
+						tag = CMDTAG_DROP_DYNAMIC_TABLE;
+					else
+						tag = CMDTAG_DROP_MATERIALIZED_VIEW;
+
 					break;
+				}
 				case OBJECT_INDEX:
 					tag = CMDTAG_DROP_INDEX;
 					break;
@@ -3642,15 +3648,26 @@ CreateCommandTag(Node *parsetree)
 						tag = CMDTAG_CREATE_TABLE_AS;
 					break;
 				case OBJECT_MATVIEW:
-					tag = CMDTAG_CREATE_MATERIALIZED_VIEW;
+				{
+					if (((CreateTableAsStmt *) parsetree)->into->dynamicTbl)
+						tag = CMDTAG_CREATE_DYNAMIC_TABLE;
+					else
+						tag = CMDTAG_CREATE_MATERIALIZED_VIEW;
+
 					break;
+				}
 				default:
 					tag = CMDTAG_UNKNOWN;
 			}
 			break;
 
 		case T_RefreshMatViewStmt:
-			tag = CMDTAG_REFRESH_MATERIALIZED_VIEW;
+			{
+				if (((RefreshMatViewStmt*) parsetree)->isdynamic)
+					tag = CMDTAG_REFRESH_DYNAMIC_TABLE;
+				else
+					tag = CMDTAG_REFRESH_MATERIALIZED_VIEW;
+			}
 			break;
 
 		case T_AlterSystemStmt:

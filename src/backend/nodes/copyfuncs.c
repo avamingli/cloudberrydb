@@ -1808,6 +1808,8 @@ _copyIntoClause(const IntoClause *from)
 	COPY_SCALAR_FIELD(ivm);
 	COPY_SCALAR_FIELD(matviewOid);
 	COPY_STRING_FIELD(enrname);
+	COPY_SCALAR_FIELD(dynamicTbl);
+	COPY_STRING_FIELD(schedule);
 
 	return newnode;
 }
@@ -4218,6 +4220,7 @@ _copyDropStmt(const DropStmt *from)
 	COPY_SCALAR_FIELD(behavior);
 	COPY_SCALAR_FIELD(missing_ok);
 	COPY_SCALAR_FIELD(concurrent);
+	COPY_SCALAR_FIELD(isdynamic);
 
 	return newnode;
 }
@@ -4786,6 +4789,7 @@ _copyRefreshMatViewStmt(const RefreshMatViewStmt *from)
 	COPY_SCALAR_FIELD(concurrent);
 	COPY_SCALAR_FIELD(skipData);
 	COPY_NODE_FIELD(relation);
+	COPY_SCALAR_FIELD(isdynamic);
 
 	return newnode;
 }

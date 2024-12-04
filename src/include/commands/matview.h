@@ -26,6 +26,8 @@ extern void SetMatViewPopulatedState(Relation relation, bool newstate);
 
 extern void SetMatViewIVMState(Relation relation, bool newstate);
 
+extern void SetDynamicTableState(Relation relation);
+
 extern ObjectAddress ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 										ParamListInfo params, QueryCompletion *qc);
 

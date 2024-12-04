@@ -1132,6 +1132,7 @@ _readDropStmt(void)
 	READ_ENUM_FIELD(behavior,DropBehavior);
 	READ_BOOL_FIELD(missing_ok);
 	READ_BOOL_FIELD(concurrent);
+	READ_BOOL_FIELD(isdynamic);
 
 	/* Force 'missing_ok' in QEs */
 #ifdef COMPILING_BINARY_FUNCS

@@ -44,6 +44,7 @@
 #include "commands/prepare.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
+#include "commands/taskcmds.h"
 #include "commands/trigger.h"
 #include "commands/view.h"
 #include "miscadmin.h"
@@ -74,6 +75,7 @@
 
 #include "catalog/gp_matview_aux.h"
 #include "catalog/oid_dispatch.h"
+#include "catalog/pg_task.h"
 #include "cdb/cdbappendonlyam.h"
 #include "cdb/cdbaocsam.h"
 #include "cdb/cdbdisp_query.h"
@@ -118,6 +120,8 @@ static void check_ivm_restriction(Node *node);
 static bool check_ivm_restriction_walker(Node *node, check_ivm_restriction_context *context);
 static Bitmapset *get_primary_key_attnos_from_query(Query *query, List **constraintList);
 static bool check_aggregate_supports_ivm(Oid aggfnoid);
+
+static void create_dynamic_table_auto_refresh_task(ParseState *pstate, Relation DynamicTableRel, char *schedule);
 
 /*
  * create_ctas_internal
@@ -537,6 +541,14 @@ ExecCreateTableAs(ParseState *pstate, CreateTableAsStmt *stmt,
 				CreateIvmTriggersOnBaseTables(query_immv, matviewOid);
 			}
 		}
+
+		/* Set Dynamic Tables. */
+		if (into->dynamicTbl)
+		{
+			SetDynamicTableState(matviewRel);
+			create_dynamic_table_auto_refresh_task(pstate, matviewRel, into->schedule);
+		}
+
 		table_close(matviewRel, NoLock);
 	}
 
@@ -1807,4 +1819,42 @@ get_primary_key_attnos_from_query(Query *query, List **constraintList)
 	}
 
 	return keys;
+}
+
+/* 
+ * Create auto-refresh task for Dynamic Tables.
+ */
+static void
+create_dynamic_table_auto_refresh_task(ParseState *pstate, Relation DynamicTableRel, char *schedule)
+{
+	ObjectAddress refaddr;
+	ObjectAddress address;
+	StringInfoData buf;
+	char *dtname = NULL;
+
+	if (schedule == NULL)
+		schedule = DYNAMIC_TABLE_DEFAULT_REFRESH_INTERVAL;
+
+	/* Create auto refresh task. */
+	CreateTaskStmt *task_stmt = makeNode(CreateTaskStmt);
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "gp_dynamic_table_refresh_%u", RelationGetRelid(DynamicTableRel));
+	task_stmt->taskname = pstrdup(buf.data);
+	task_stmt->schedule = pstrdup(schedule);
+	task_stmt->if_not_exists = false; /* report error if failed. */
+	dtname = quote_qualified_identifier(get_namespace_name(RelationGetNamespace(DynamicTableRel)),
+											 RelationGetRelationName(DynamicTableRel));
+	resetStringInfo(&buf);
+	appendStringInfo(&buf, "REFRESH DYNAMIC TABLE %s", dtname);
+	task_stmt->sql = pstrdup(buf.data);
+	bool saved_allowSystemTableMods = allowSystemTableMods;
+	allowSystemTableMods = true;
+	address = DefineTask(pstate, task_stmt);
+	allowSystemTableMods = saved_allowSystemTableMods;
+
+	refaddr.classId = RelationRelationId;
+	refaddr.objectId = RelationGetRelid(DynamicTableRel);
+	refaddr.objectSubId = 0;
+	recordDependencyOn(&address, &refaddr, DEPENDENCY_INTERNAL);
 }

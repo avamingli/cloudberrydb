@@ -550,7 +550,12 @@ ExplainOneUtility(Node *utilityStmt, IntoClause *into, ExplainState *es,
 			if (ctas->objtype == OBJECT_TABLE)
 				ExplainDummyGroup("CREATE TABLE AS", NULL, es);
 			else if (ctas->objtype == OBJECT_MATVIEW)
-				ExplainDummyGroup("CREATE MATERIALIZED VIEW", NULL, es);
+			{
+				if(ctas->into && ctas->into->dynamicTbl)
+					ExplainDummyGroup("CREATE DYNAMIC TABLE", NULL, es);
+				else
+					ExplainDummyGroup("CREATE MATERIALIZED VIEW", NULL, es);
+			}
 			else
 				elog(ERROR, "unexpected object type: %d",
 					 (int) ctas->objtype);

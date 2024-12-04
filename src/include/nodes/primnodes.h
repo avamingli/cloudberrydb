@@ -125,6 +125,9 @@ typedef struct IntoClause
 	bool		ivm;			/* true for WITH IVM */
 	Oid 		matviewOid;		/* matview oid */
 	char		*enrname;		/* ENR name for materialized view delta */
+	bool		dynamicTbl;		/* true for Dynamic Tables. */
+	/* pg_task cron schedule, used for Dynamic Tables. */
+	char	   *schedule;
 } IntoClause;
 
 typedef struct CopyIntoClause

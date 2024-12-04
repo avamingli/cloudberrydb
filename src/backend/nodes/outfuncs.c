@@ -1210,6 +1210,8 @@ _outIntoClause(StringInfo str, const IntoClause *node)
 	WRITE_BOOL_FIELD(ivm);
 	WRITE_OID_FIELD(matviewOid);
 	WRITE_STRING_FIELD(enrname);
+	WRITE_BOOL_FIELD(dynamicTbl);
+	WRITE_STRING_FIELD(schedule);
 }
 
 static void

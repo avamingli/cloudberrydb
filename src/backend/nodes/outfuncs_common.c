@@ -647,6 +647,7 @@ _outDropStmt(StringInfo str, const DropStmt *node)
 	WRITE_ENUM_FIELD(behavior, DropBehavior);
 	WRITE_BOOL_FIELD(missing_ok);
 	WRITE_BOOL_FIELD(concurrent);
+	WRITE_BOOL_FIELD(isdynamic);
 }
 
 static void

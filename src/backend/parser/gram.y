@@ -764,7 +764,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 	DATA_P DATABASE DAY_P DEALLOCATE DEC DECIMAL_P DECLARE DEFAULT DEFAULTS
 	DEFERRABLE DEFERRED DEFINER DELETE_P DELIMITER DELIMITERS DEPENDS DEPTH DESC
 	DETACH DICTIONARY DIRECTORY DISABLE_P DISCARD DISTINCT DO DOCUMENT_P DOMAIN_P
-	DOUBLE_P DROP
+	DOUBLE_P DROP DYNAMIC
 
 	EACH ELSE ENABLE_P ENCODING ENCRYPTED END_P ENDPOINT ENUM_P ESCAPE EVENT EXCEPT
 	EXCLUDE EXCLUDING EXCLUSIVE EXECUTE EXISTS EXPLAIN EXPRESSION
@@ -7139,6 +7139,74 @@ CreateMatViewStmt:
 					ctas->into->distributedBy = $13;
 					$$ = (Node *) ctas;
 				}
+/*****************************************************************************
+ *
+ *		QUERY :
+ *				CREATE DYNAMIC TABLE relname AS SelectStmt
+ *
+ *****************************************************************************/
+		| CREATE OptNoLog DYNAMIC TABLE create_mv_target SCHEDULE task_schedule AS SelectStmt opt_with_data OptDistributedBy
+				{
+					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
+					ctas->query = $9;
+					ctas->into = $5;
+					ctas->objtype = OBJECT_MATVIEW;
+					ctas->is_select_into = false;
+					ctas->if_not_exists = false;
+					/* cram additional flags into the IntoClause */
+					$5->rel->relpersistence = $2;
+					$5->skipData = !($10);
+					$5->dynamicTbl = true;
+					$5->schedule = $7;
+					ctas->into->distributedBy = $11;
+					$$ = (Node *) ctas;
+				}
+		| CREATE OptNoLog DYNAMIC TABLE create_mv_target AS SelectStmt opt_with_data OptDistributedBy
+				{
+					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
+					ctas->query = $7;
+					ctas->into = $5;
+					ctas->objtype = OBJECT_MATVIEW;
+					ctas->is_select_into = false;
+					ctas->if_not_exists = false;
+					/* cram additional flags into the IntoClause */
+					$5->rel->relpersistence = $2;
+					$5->skipData = !($8);
+					$5->dynamicTbl = true;
+					ctas->into->distributedBy = $9;
+					$$ = (Node *) ctas;
+				}
+		| CREATE OptNoLog DYNAMIC TABLE create_mv_target IF_P NOT EXISTS SCHEDULE task_schedule AS SelectStmt opt_with_data OptDistributedBy
+				{
+					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
+					ctas->query = $12;
+					ctas->into = $5;
+					ctas->objtype = OBJECT_MATVIEW;
+					ctas->is_select_into = false;
+					ctas->if_not_exists = true;
+					/* cram additional flags into the IntoClause */
+					$5->rel->relpersistence = $2;
+					$5->skipData = !($13);
+					$5->dynamicTbl = true;
+					$5->schedule = $10;
+					ctas->into->distributedBy = $14;
+					$$ = (Node *) ctas;
+				}
+		| CREATE OptNoLog DYNAMIC TABLE create_mv_target IF_P NOT EXISTS AS SelectStmt opt_with_data OptDistributedBy
+				{
+					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
+					ctas->query = $10;
+					ctas->into = $5;
+					ctas->objtype = OBJECT_MATVIEW;
+					ctas->is_select_into = false;
+					ctas->if_not_exists = true;
+					/* cram additional flags into the IntoClause */
+					$5->rel->relpersistence = $2;
+					$5->skipData = !($11);
+					$5->dynamicTbl = true;
+					ctas->into->distributedBy = $12;
+					$$ = (Node *) ctas;
+				}
 		;
 
 create_mv_target:
@@ -7154,6 +7222,8 @@ create_mv_target:
 					$$->viewQuery = NULL;		/* filled at analysis time */
 					$$->skipData = false;		/* might get changed later */
 					$$->ivm = false;
+					$$->dynamicTbl = false;
+					$$->schedule = NULL;
 
 					$$->accessMethod = greenplumLegacyAOoptions($$->accessMethod, &$$->options);
 				}
@@ -7167,11 +7237,11 @@ OptNoLog:	UNLOGGED					{ $$ = RELPERSISTENCE_UNLOGGED; }
 			| /*EMPTY*/					{ $$ = RELPERSISTENCE_PERMANENT; }
 		;
 
-
 /*****************************************************************************
  *
  *		QUERY :
  *				REFRESH MATERIALIZED VIEW qualified_name
+ *				REFRESH DYNAMIC TABLE qualified_name
  *
  *****************************************************************************/
 
@@ -7182,6 +7252,16 @@ RefreshMatViewStmt:
 					n->concurrent = $4;
 					n->relation = $5;
 					n->skipData = !($6);
+					n->isdynamic = false;
+					$$ = (Node *) n;
+				}
+			| REFRESH DYNAMIC TABLE opt_concurrently qualified_name opt_with_data
+				{
+					RefreshMatViewStmt *n = makeNode(RefreshMatViewStmt);
+					n->concurrent = $4;
+					n->relation = $5;
+					n->skipData = !($6);
+					n->isdynamic = true;
 					$$ = (Node *) n;
 				}
 		;
@@ -9440,6 +9520,7 @@ DropOpClassStmt:
 					n->behavior = $7;
 					n->missing_ok = false;
 					n->concurrent = false;
+					n->isdynamic = false;
 					$$ = (Node *) n;
 				}
 			| DROP OPERATOR CLASS IF_P EXISTS any_name USING name opt_drop_behavior
@@ -9450,6 +9531,7 @@ DropOpClassStmt:
 					n->behavior = $9;
 					n->missing_ok = true;
 					n->concurrent = false;
+					n->isdynamic = false;
 					$$ = (Node *) n;
 				}
 		;
@@ -9463,6 +9545,7 @@ DropOpFamilyStmt:
 					n->behavior = $7;
 					n->missing_ok = false;
 					n->concurrent = false;
+					n->isdynamic = false;
 					$$ = (Node *) n;
 				}
 			| DROP OPERATOR FAMILY IF_P EXISTS any_name USING name opt_drop_behavior
@@ -9473,6 +9556,7 @@ DropOpFamilyStmt:
 					n->behavior = $9;
 					n->missing_ok = true;
 					n->concurrent = false;
+					n->isdynamic = false;
 					$$ = (Node *) n;
 				}
 		;
@@ -9523,6 +9607,7 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $5;
 					n->behavior = $6;
 					n->concurrent = false;
+					n->isdynamic = false;
 					$$ = (Node *)n;
 				}
 			| DROP object_type_any_name any_name_list opt_drop_behavior
@@ -9533,6 +9618,7 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $3;
 					n->behavior = $4;
 					n->concurrent = false;
+					n->isdynamic = false;
 					$$ = (Node *)n;
 				}
 			| DROP drop_type_name IF_P EXISTS name_list opt_drop_behavior
@@ -9543,6 +9629,7 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $5;
 					n->behavior = $6;
 					n->concurrent = false;
+					n->isdynamic = false;
 					$$ = (Node *)n;
 				}
 			| DROP drop_type_name name_list opt_drop_behavior
@@ -9553,6 +9640,7 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $3;
 					n->behavior = $4;
 					n->concurrent = false;
+					n->isdynamic = false;
 					$$ = (Node *)n;
 				}
 			| DROP object_type_name_on_any_name name ON any_name opt_drop_behavior
@@ -9563,6 +9651,7 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->behavior = $6;
 					n->missing_ok = false;
 					n->concurrent = false;
+					n->isdynamic = false;
 					$$ = (Node *) n;
 				}
 			| DROP object_type_name_on_any_name IF_P EXISTS name ON any_name opt_drop_behavior
@@ -9573,6 +9662,7 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->behavior = $8;
 					n->missing_ok = true;
 					n->concurrent = false;
+					n->isdynamic = false;
 					$$ = (Node *) n;
 				}
 			| DROP TYPE_P type_name_list opt_drop_behavior
@@ -9583,6 +9673,7 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $3;
 					n->behavior = $4;
 					n->concurrent = false;
+					n->isdynamic = false;
 					$$ = (Node *) n;
 				}
 			| DROP TYPE_P IF_P EXISTS type_name_list opt_drop_behavior
@@ -9593,6 +9684,7 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $5;
 					n->behavior = $6;
 					n->concurrent = false;
+					n->isdynamic = false;
 					$$ = (Node *) n;
 				}
 			| DROP DOMAIN_P type_name_list opt_drop_behavior
@@ -9603,6 +9695,7 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $3;
 					n->behavior = $4;
 					n->concurrent = false;
+					n->isdynamic = false;
 					$$ = (Node *) n;
 				}
 			| DROP DOMAIN_P IF_P EXISTS type_name_list opt_drop_behavior
@@ -9613,6 +9706,7 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $5;
 					n->behavior = $6;
 					n->concurrent = false;
+					n->isdynamic = false;
 					$$ = (Node *) n;
 				}
 			| DROP INDEX CONCURRENTLY any_name_list opt_drop_behavior
@@ -9623,6 +9717,7 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $4;
 					n->behavior = $5;
 					n->concurrent = true;
+					n->isdynamic = false;
 					$$ = (Node *)n;
 				}
 			| DROP INDEX CONCURRENTLY IF_P EXISTS any_name_list opt_drop_behavior
@@ -9633,6 +9728,30 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $6;
 					n->behavior = $7;
 					n->concurrent = true;
+					n->isdynamic = false;
+					$$ = (Node *)n;
+				}
+/* DROP DYNAMIC TABLE */
+			| DROP DYNAMIC TABLE IF_P EXISTS any_name_list opt_drop_behavior
+				{
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_MATVIEW;
+					n->missing_ok = true;
+					n->objects = $6;
+					n->behavior = $7;
+					n->concurrent = false;
+					n->isdynamic = true;
+					$$ = (Node *)n;
+				}
+			| DROP DYNAMIC TABLE any_name_list opt_drop_behavior
+				{
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_MATVIEW;
+					n->missing_ok = false;
+					n->objects = $4;
+					n->behavior = $5;
+					n->concurrent = false;
+					n->isdynamic = true;
 					$$ = (Node *)n;
 				}
 		;
@@ -19384,6 +19503,7 @@ unreserved_keyword:
 			| DOUBLE_P
 			| DROP
 			| DXL
+			| DYNAMIC
 			| EACH
 			| ENABLE_P
 			| ENCODING
@@ -20317,6 +20437,7 @@ bare_label_keyword:
 			| DOUBLE_P
 			| DROP
 			| DXL
+			| DYNAMIC
 			| EACH
 			| ELSE
 			| ENABLE_P

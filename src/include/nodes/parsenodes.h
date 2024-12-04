@@ -3438,6 +3438,7 @@ typedef struct DropStmt
 	DropBehavior behavior;		/* RESTRICT or CASCADE behavior */
 	bool		missing_ok;		/* skip error if object is missing? */
 	bool		concurrent;		/* drop index concurrently? */
+	bool		isdynamic;		/* drop a dynamic table? */
 } DropStmt;
 
 /* ----------------------
@@ -4121,6 +4122,7 @@ typedef struct RefreshMatViewStmt
 	bool		concurrent;		/* allow concurrent access? */
 	bool		skipData;		/* true for WITH NO DATA */
 	RangeVar   *relation;		/* relation to insert into */
+	bool		isdynamic;		/* relation is dynamic table? */
 } RefreshMatViewStmt;
 
 /* ----------------------

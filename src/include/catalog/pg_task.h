@@ -55,4 +55,10 @@ extern Oid GetTaskJobId(const char *jobname, const char *username);
 
 extern char * GetTaskNameById(Oid jobid);
 
+/* Reversed prefix for Dynamic Tables. */
+#define DYNAMIC_TASK_PREFIX "gp_dynamic_table_refresh_"
+
+/* Default Dynamic Table Schedule */
+#define DYNAMIC_TABLE_DEFAULT_REFRESH_INTERVAL "*/5 * * * *"
+
 #endif			/* PG_TASK_H */

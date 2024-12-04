@@ -340,6 +340,8 @@ test: uao_dml/ao_unique_index_build_row uao_dml/ao_unique_index_build_column
 
 test: bfv_copy
 
+test: dynamic_table
+
 # run this at the end of the schedule for more chance to catch abnormalities
 # different CI env with GPDB
 # test: gp_check_files

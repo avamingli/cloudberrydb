@@ -569,6 +569,8 @@ _readIntoClause(void)
 	READ_BOOL_FIELD(ivm);
 	READ_OID_FIELD(matviewOid);
 	READ_STRING_FIELD(enrname);
+	READ_BOOL_FIELD(dynamicTbl);
+	READ_STRING_FIELD(schedule);
 
 	READ_DONE();
 }

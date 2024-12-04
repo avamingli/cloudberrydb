@@ -109,6 +109,14 @@ DefineTask(ParseState *pstate, CreateTaskStmt *stmt)
         }
     }
 
+	if (!allowSystemTableMods && strncmp(stmt->taskname, DYNAMIC_TASK_PREFIX, 25) == 0)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_RESERVED_NAME),
+				 errmsg("unacceptable task name \"%s\"", stmt->taskname),
+				 errdetail("The prefix \"%s\" is reserved for system tasks.",
+						   DYNAMIC_TASK_PREFIX)));
+	}
     jobid = ScheduleCronJob(cstring_to_text(stmt->schedule), cstring_to_text(stmt->sql),
                             cstring_to_text(dbname), cstring_to_text(username),
                             true, cstring_to_text(stmt->taskname));
@@ -278,6 +286,13 @@ DropTask(ParseState *pstate, DropTaskStmt *stmt)
     /* delete from pg_task_run_history according to the jobid */
     if (OidIsValid(jobid))
     {
+		if (!allowSystemTableMods && strncmp(stmt->taskname, DYNAMIC_TASK_PREFIX, 25) == 0)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_RESERVED_NAME),
+					 errmsg("can not drop a internal task \"%s\" paried with dynamic table", stmt->taskname),
+					 errdetail("please drop the dynamic table instead")));
+		}
         RemoveTaskRunHistoryByJobId(jobid);
         ObjectAddressSet(address, TaskRelationId, jobid);
         /* Clean up dependencies */

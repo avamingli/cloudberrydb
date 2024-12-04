@@ -1332,7 +1332,7 @@ permissionsList(const char *pattern)
 					  " WHEN " CppAsString2(RELKIND_RELATION) " THEN '%s'"
 					  " WHEN " CppAsString2(RELKIND_DIRECTORY_TABLE) " THEN '%s'"
 					  " WHEN " CppAsString2(RELKIND_VIEW) " THEN '%s'"
-					  " WHEN " CppAsString2(RELKIND_MATVIEW) " THEN '%s'"
+					  " WHEN " CppAsString2(RELKIND_MATVIEW) " THEN CASE c.relisdynamic WHEN true THEN '%s' ELSE '%s' END"
 					  " WHEN " CppAsString2(RELKIND_SEQUENCE) " THEN '%s'"
 					  " WHEN " CppAsString2(RELKIND_FOREIGN_TABLE) " THEN '%s'"
 					  " WHEN " CppAsString2(RELKIND_PARTITIONED_TABLE) " THEN '%s'"
@@ -1343,6 +1343,7 @@ permissionsList(const char *pattern)
 					  gettext_noop("table"),
 					  gettext_noop("directory table"),
 					  gettext_noop("view"),
+					  gettext_noop("dynamic table"),
 					  gettext_noop("materialized view"),
 					  gettext_noop("sequence"),
 					  gettext_noop("foreign table"),
@@ -1927,6 +1928,7 @@ describeOneTableDetails(const char *schemaname,
 		char		relreplident;
 		char	   *relam;
 		bool		isivm;
+		bool		isdynamic;
 
 		char	   *compressionType;
 		char	   *compressionLevel;
@@ -1959,7 +1961,8 @@ describeOneTableDetails(const char *schemaname,
 						  "false AS relhasoids, c.relispartition, %s, c.reltablespace, "
 						  "CASE WHEN c.reloftype = 0 THEN '' ELSE c.reloftype::pg_catalog.regtype::pg_catalog.text END, "
 						  "c.relpersistence, c.relreplident, am.amname, "
-						  "c.relisivm\n"
+						  "c.relisivm, "
+						  "c.relisdynamic \n"
 						  "FROM pg_catalog.pg_class c\n "
 						  "LEFT JOIN pg_catalog.pg_class tc ON (c.reltoastrelid = tc.oid)\n"
 						  "LEFT JOIN pg_catalog.pg_am am ON (c.relam = am.oid)\n"
@@ -2155,6 +2158,7 @@ describeOneTableDetails(const char *schemaname,
 	else
 		tableinfo.relam = NULL;
 	tableinfo.isivm = strcmp(PQgetvalue(res, 0, 15), "t") == 0;
+	tableinfo.isdynamic = strcmp(PQgetvalue(res, 0, 16), "t") == 0;
 
 	/* GPDB Only:  relstorage  */
 	if (pset.sversion < 120000 && isGPDB())
@@ -2484,8 +2488,18 @@ describeOneTableDetails(const char *schemaname,
 				printfPQExpBuffer(&title, _("Unlogged materialized view \"%s.%s\""),
 								  schemaname, relationname);
 			else
-				printfPQExpBuffer(&title, _("Materialized view \"%s.%s\""),
-								  schemaname, relationname);
+			{
+				/*
+				 * Postgres has forbidden UNLOGGED materialized view,
+				 * only consider below cases.
+				 */
+				if (!tableinfo.isdynamic)
+					printfPQExpBuffer(&title, _("Materialized view \"%s.%s\""),
+									schemaname, relationname);
+				else
+					printfPQExpBuffer(&title, _("Dynamic table \"%s.%s\""),
+									schemaname, relationname);
+			}
 			break;
 		case RELKIND_INDEX:
 			if (tableinfo.relpersistence == 'u')
@@ -5005,7 +5019,7 @@ listTables(const char *tabtypes, const char *pattern, bool verbose, bool showSys
 					  " WHEN " CppAsString2(RELKIND_RELATION) " THEN '%s'"
 					  " WHEN " CppAsString2(RELKIND_DIRECTORY_TABLE) " THEN '%s'"
 					  " WHEN " CppAsString2(RELKIND_VIEW) " THEN '%s'"
-					  " WHEN " CppAsString2(RELKIND_MATVIEW) " THEN '%s'"
+					  " WHEN " CppAsString2(RELKIND_MATVIEW) " THEN CASE c.relisdynamic WHEN true THEN '%s' ELSE '%s' END"
 					  " WHEN " CppAsString2(RELKIND_INDEX) " THEN '%s'"
 					  " WHEN " CppAsString2(RELKIND_SEQUENCE) " THEN '%s'"
 					  " WHEN " CppAsString2(RELKIND_TOASTVALUE) " THEN '%s'"
@@ -5019,6 +5033,7 @@ listTables(const char *tabtypes, const char *pattern, bool verbose, bool showSys
 					  gettext_noop("table"),
 					  gettext_noop("directory table"),
 					  gettext_noop("view"),
+					  gettext_noop("dynamic table"),
 					  gettext_noop("materialized view"),
 					  gettext_noop("index"),
 					  gettext_noop("sequence"),

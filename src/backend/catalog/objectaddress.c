@@ -759,6 +759,9 @@ static const struct object_type_map
 		"materialized view", OBJECT_MATVIEW
 	},
 	{
+		"dynamic table", OBJECT_MATVIEW
+	},
+	{
 		"composite type", -1
 	},							/* unmapped */
 	{
@@ -4384,8 +4387,16 @@ getRelationDescription(StringInfo buffer, Oid relid, bool missing_ok)
 							 relname);
 			break;
 		case RELKIND_MATVIEW:
-			appendStringInfo(buffer, _("materialized view %s"),
-							 relname);
+			if (relForm->relisdynamic)
+			{
+				appendStringInfo(buffer, _("dynamic table %s"),
+								relname);
+			}
+			else
+			{
+				appendStringInfo(buffer, _("materialized view %s"),
+								relname);
+			}
 			break;
 		case RELKIND_COMPOSITE_TYPE:
 			appendStringInfo(buffer, _("composite type %s"),
@@ -4954,7 +4965,10 @@ getRelationTypeDescription(StringInfo buffer, Oid relid, int32 objectSubId,
 			appendStringInfoString(buffer, "view");
 			break;
 		case RELKIND_MATVIEW:
-			appendStringInfoString(buffer, "materialized view");
+			if (relForm->relisdynamic)
+				appendStringInfoString(buffer, "dynamic table");
+			else
+				appendStringInfoString(buffer, "materialized view");
 			break;
 		case RELKIND_COMPOSITE_TYPE:
 			appendStringInfoString(buffer, "composite type");

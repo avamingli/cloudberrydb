@@ -176,6 +176,8 @@ _equalIntoClause(const IntoClause *a, const IntoClause *b)
 	COMPARE_SCALAR_FIELD(ivm);
 	COMPARE_SCALAR_FIELD(matviewOid);
 	COMPARE_STRING_FIELD(enrname);
+	COMPARE_SCALAR_FIELD(dynamicTbl);
+	COMPARE_STRING_FIELD(schedule);
 	return true;
 }
 
@@ -1480,6 +1482,7 @@ _equalDropStmt(const DropStmt *a, const DropStmt *b)
 	COMPARE_SCALAR_FIELD(behavior);
 	COMPARE_SCALAR_FIELD(missing_ok);
 	COMPARE_SCALAR_FIELD(concurrent);
+	COMPARE_SCALAR_FIELD(isdynamic);
 
 	return true;
 }
@@ -1962,6 +1965,7 @@ _equalRefreshMatViewStmt(const RefreshMatViewStmt *a, const RefreshMatViewStmt *
 	COMPARE_SCALAR_FIELD(concurrent);
 	COMPARE_SCALAR_FIELD(skipData);
 	COMPARE_NODE_FIELD(relation);
+	COMPARE_SCALAR_FIELD(isdynamic);
 
 	return true;
 }
