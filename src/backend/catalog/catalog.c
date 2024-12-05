@@ -570,16 +570,6 @@ IsSharedRelation(Oid relationId)
 		return true;
 	}
 
-	/* materialized view aux and its indexes */
-	if (relationId == GpMatviewAuxId ||
-		relationId == GpMatviewAuxMvoidIndexId ||
-		relationId == GpMatviewAuxMvnameIndexId ||
-		relationId == GpMatviewAuxDatastatusIndexId ||
-		relationId == GpMatviewTablesId ||
-		relationId == GpMatviewTablesMvRelIndexId ||
-		relationId == GpMatviewTablesRelIndexId)
-		return true;
-
 	/* warehouse table and its indexes */
 	if (relationId == GpWarehouseRelationId ||
 		relationId == GpWarehouseOidIndexId ||

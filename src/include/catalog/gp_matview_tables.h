@@ -26,7 +26,7 @@
 /*
  * Defines for gp_matview_tables
  */
-CATALOG(gp_matview_tables,7150,GpMatviewTablesId) BKI_SHARED_RELATION
+CATALOG(gp_matview_tables,7150,GpMatviewTablesId)
 {
 	Oid			mvoid; 	/* materialized view oid */
 	Oid			relid; 	/* base table oid */

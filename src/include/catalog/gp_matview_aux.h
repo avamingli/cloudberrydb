@@ -23,7 +23,7 @@
 /*
  * Defines for gp_matview_aux
  */
-CATALOG(gp_matview_aux,7153,GpMatviewAuxId) BKI_SHARED_RELATION
+CATALOG(gp_matview_aux,7153,GpMatviewAuxId)
 {
 	Oid			mvoid; 	/* materialized view oid */
 	NameData	mvname; /* materialized view name */
