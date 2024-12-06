@@ -389,6 +389,7 @@ static bool testAttributeEncodingSupport(Archive *fout);
 static char *nextToken(register char **stringp, register const char *delim);
 static void addDistributedBy(Archive *fout, PQExpBuffer q, const TableInfo *tbinfo, int actual_atts);
 static void addDistributedByOld(Archive *fout, PQExpBuffer q, const TableInfo *tbinfo, int actual_atts);
+static void addSchedule(Archive *fout, PQExpBuffer q, const TableInfo *tbinfo);
 static bool isGPDB4300OrLater(Archive *fout);
 static bool isGPDB(Archive *fout);
 static bool isGPDB5000OrLater(Archive *fout);
@@ -18173,6 +18174,7 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 		{
 			/* We'r sure there is no UNLOGGED and this is a DYNAMIC TABLE. */
 			appendPQExpBuffer(q, "CREATE DYNAMIC TABLE %s", qualrelname);
+			addSchedule(fout, q, tbinfo);
 		}
 		else
 		{
@@ -21459,6 +21461,32 @@ testExtProtocolSupport(Archive *fout)
 	return isSupported;
 }
 
+/*
+ *	addSchedule
+ *
+ *	find the SCHEDULE of the job in pg_task with dynamic table
+ *	and append the SCHEDULE clause to the passed in dump buffer (q).
+ */
+static void
+addSchedule(Archive *fout, PQExpBuffer q, const TableInfo *tbinfo)
+{
+	PQExpBuffer query = createPQExpBuffer();
+	PGresult   *res;
+	char	   *dby;
+
+	appendPQExpBuffer(query,
+					  "SELECT pg_catalog.pg_get_dynamic_table_schedule(%u)",
+					  tbinfo->dobj.catId.oid);
+
+	res = ExecuteSqlQueryForSingleRow(fout, query->data);
+
+	dby = PQgetvalue(res, 0, 0);
+	if (strcmp(dby, "") != 0)
+		appendPQExpBuffer(q, " SCHEDULE \'%s\'", PQgetvalue(res, 0, 0));
+
+	PQclear(res);
+	destroyPQExpBuffer(query);
+}
 
 /*
  *	addDistributedBy
