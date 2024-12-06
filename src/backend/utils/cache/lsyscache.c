@@ -2070,6 +2070,30 @@ get_rel_relisivm(Oid relid)
 }
 
 /*
+ * get_rel_relisdynamic
+ *
+ *		Returns the relisdynamic flag associated with a given relation.
+ */
+bool
+get_rel_relisdynamic(Oid relid)
+{
+	HeapTuple	tp;
+
+	tp = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
+	if (HeapTupleIsValid(tp))
+	{
+		Form_pg_class reltup = (Form_pg_class) GETSTRUCT(tp);
+		bool		result;
+
+		result = reltup->relisdynamic;
+		ReleaseSysCache(tp);
+		return result;
+	}
+	else
+		return false;
+}
+
+/*
  * get_rel_tablespace
  *
  *		Returns the pg_tablespace OID associated with a given relation.

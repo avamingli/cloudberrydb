@@ -12601,3 +12601,7 @@
   proargtypes => '_oid text', proallargtypes => '{_oid,text,oid,int8}',
   proargmodes => '{i,i,o,o}', proargnames => '{reloids,forkname,reloid,size}',
   prosrc => 'cbdb_relation_size' },
+
+{ oid => 8693, descr => 'deparse SCHEDULE clause for a given dynamic table',
+  proname => 'pg_get_dynamic_table_schedule', provolatile => 's', prorettype => 'text',
+  proargtypes => 'oid', prosrc => 'pg_get_dynamic_table_schedule' },

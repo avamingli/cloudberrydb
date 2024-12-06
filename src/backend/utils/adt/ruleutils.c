@@ -37,11 +37,13 @@
 #include "catalog/pg_partitioned_table.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_statistic_ext.h"
+#include "catalog/pg_task.h"
 #include "catalog/pg_trigger.h"
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
+#include "common/fe_memutils.h"
 #include "common/keywords.h"
 #include "executor/spi.h"
 #include "funcapi.h"
@@ -12349,6 +12351,71 @@ flatten_reloptions(Oid relid)
 	ReleaseSysCache(tuple);
 
 	return result;
+}
+
+/*
+ * Get dynamic table's corresponding task SCHEDULE.
+ */
+Datum
+pg_get_dynamic_table_schedule(PG_FUNCTION_ARGS)
+{
+	Oid			relid = PG_GETARG_OID(0);
+	Relation 	pg_task;
+	StringInfoData buf;
+	char		*username;
+	SysScanDesc		scanDescriptor = NULL;
+	ScanKeyData scanKey[2];
+	HeapTuple		heapTuple = NULL;
+	Form_pg_task	task = NULL;
+
+	if (!get_rel_relisdynamic(relid))
+	{
+		ereport(WARNING,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("relation of oid \"%u\" is not dynamic table", relid)));
+		PG_RETURN_TEXT_P(cstring_to_text(""));
+	}
+
+	pg_task = table_open(TaskRelationId, AccessShareLock);
+	if (!pg_task)
+	{
+		table_close(pg_task, AccessShareLock);
+		PG_RETURN_TEXT_P(cstring_to_text(""));
+	}
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "%s%u", DYNAMIC_TASK_PREFIX, relid);
+
+	/* FIXME: is it possible that supersuers try to dump task? */
+	username = GetUserNameFromId(GetUserId(), false);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_task_jobname,
+				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(buf.data));
+	ScanKeyInit(&scanKey[1], Anum_pg_task_username,
+				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(username));
+
+	scanDescriptor = systable_beginscan(pg_task, TaskJobNameUserNameIndexId, false,
+										NULL, 2, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(WARNING,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("task \"%s\" does not exist", buf.data)));
+		table_close(pg_task, AccessShareLock);
+		PG_RETURN_TEXT_P(cstring_to_text(""));
+	}
+
+	task = (Form_pg_task) GETSTRUCT(heapTuple);
+
+	resetStringInfo(&buf);
+	appendStringInfo(&buf, "%s", text_to_cstring(&task->schedule));
+
+	systable_endscan(scanDescriptor);
+	table_close(pg_task, AccessShareLock);
+
+	PG_RETURN_TEXT_P(string_to_text(buf.data));
 }
 
 /* ----------

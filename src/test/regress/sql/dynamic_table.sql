@@ -1,6 +1,8 @@
 -- start_matchsubs
 -- m/ERROR:  can not drop a internal task "gp_dynamic_table_refresh_.*/
--- s/ERROR:  can not drop a internal task "gp_dynamic_table_refresh_.*/ERROR:  can not drop a internal task "gp_dynamic_table_refresh_xxx"/
+-- s/ERROR:  can not drop a internal task "gp_dynamic_table_refresh_.*/ERROR:  can not drop a internal task "gp_dynamic_table_refresh_xxx"/g
+-- m/WARNING:  relation of oid "\d+" is not dynamic table/
+-- s/WARNING:  relation of oid "\d+" is not dynamic table/WARNING:  relation of oid "XXX" is not dynamic table/g
 -- end_matchsubs
 CREATE SCHEMA dynamic_table_schema;
 SET search_path TO dynamic_table_schema;
@@ -130,6 +132,13 @@ DROP TASK gp_dynamic_table_refresh_:dtoid;
 
 \unset dtoid
 
+CREATE DYNAMIC TABLE dt_schedule SCHEDULE '1 2 3 4 5' AS SELECT * FROM t2;
+SELECT pg_catalog.pg_get_dynamic_table_schedule('dt_schedule'::regclass::oid);
+-- not a dynamic table
+SELECT pg_catalog.pg_get_dynamic_table_schedule('t2'::regclass::oid);
+
 RESET enable_answer_query_using_materialized_views;
 RESET optimizer;
+--start_ignore
 DROP SCHEMA dynamic_table_schema cascade;
+--end_ignore
