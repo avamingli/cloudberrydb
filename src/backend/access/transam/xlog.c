@@ -10393,7 +10393,6 @@ GetWALAvailability(XLogRecPtr targetLSN)
 
 	/*
 	 * Calculate the oldest segment currently reserved by all slots,
-<<<<<<< HEAD
 	 * considering wal_keep_size and max_slot_wal_keep_size.  Initialize
 	 * oldestSlotSeg to the current segment.
 	 */
@@ -10402,14 +10401,6 @@ GetWALAvailability(XLogRecPtr targetLSN)
 	/* calculate oldest segment currently needed by slots */
 	XLByteToSeg(currpos, oldestSlotSeg, wal_segment_size);
 	KeepLogSeg(currpos, &oldestSlotSeg, InvalidXLogRecPtr);
-=======
-	 * considering wal_keep_segments and max_slot_wal_keep_size.  Initialize
-	 * oldestSlotSeg to the current segment.
-	 */
-	currpos = GetXLogWriteRecPtr();
-	XLByteToSeg(currpos, oldestSlotSeg, wal_segment_size);
-	KeepLogSeg(currpos, &oldestSlotSeg);
->>>>>>> e13e3d92ffc (Fix uninitialized value in segno calculation)
 
 	/*
 	 * Find the oldest extant segment file. We get 1 until checkpoint removes
