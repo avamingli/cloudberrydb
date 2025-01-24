@@ -40,6 +40,7 @@
 		"bonjour",
 		"bonjour_name",
 		"check_function_bodies",
+		"check_refresh_plan_parallel",
 		"checkpoint_completion_target",
 		"checkpoint_flush_after",
 		"checkpoint_timeout",

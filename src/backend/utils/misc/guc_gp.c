@@ -463,6 +463,9 @@ bool		gp_allow_date_field_width_5digits = false;
 /* Avoid do a real REFRESH materialized view if possibile. */
 bool		gp_enable_refresh_fast_path = true;
 
+/* check if plan of REFRESH command is parallel. */
+bool		check_refresh_plan_parallel = false;
+
 static const struct config_enum_entry gp_log_format_options[] = {
 	{"text", 0},
 	{"csv", 1},
@@ -3153,6 +3156,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 		 NULL,
 		},
 		&gp_log_suboverflow_statement,
+		false,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"check_refresh_plan_parallel", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Check the SELECT part plan of a REFRESH command is parallel."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&check_refresh_plan_parallel,
 		false,
 		NULL, NULL, NULL
 	},

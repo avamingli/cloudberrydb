@@ -64,4 +64,6 @@ extern bool optimizer_init;
 
 extern void preprocess_qual_conditions(PlannerInfo *root, Node *jtnode);
 
+extern bool plan_has_parallel(PlannedStmt *plannedstmt);
+
 #endif							/* PLANNER_H */

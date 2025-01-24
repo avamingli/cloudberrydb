@@ -630,6 +630,8 @@ extern bool gp_enable_global_deadlock_detector;
 
 extern bool	gp_enable_refresh_fast_path;
 
+extern bool check_refresh_plan_parallel;
+
 extern bool gp_enable_predicate_pushdown;
 extern int  gp_predicate_pushdown_sample_rows;
 

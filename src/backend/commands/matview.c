@@ -50,6 +50,7 @@
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/optimizer.h"
+#include "optimizer/planner.h"
 #include "parser/analyze.h"
 #include "parser/parse_clause.h"
 #include "parser/parse_func.h"
@@ -825,6 +826,14 @@ refresh_matview_datafill(DestReceiver *dest, Query *query,
 	/* Plan the query which will generate data for the refresh. */
 
 	plan = pg_plan_query(query, queryString, CURSOR_OPT_PARALLEL_OK, NULL);
+
+	if (!refreshClause->skipData &&
+		enable_parallel &&
+		check_refresh_plan_parallel &&
+		plan_has_parallel(plan))
+	{
+		ereport(NOTICE, errmsg("Plan of REFRESH is parallel"));
+	}
 
 	plan->refreshClause = refreshClause;
 

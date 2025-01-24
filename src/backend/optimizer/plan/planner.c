@@ -9007,3 +9007,51 @@ make_new_rollups_for_hash_grouping_set(PlannerInfo        *root,
 
 	return srd;
 }
+
+typedef struct ParallelFinderContext
+{
+	plan_tree_base_prefix base;
+	bool	has_parallel;
+} ParallelFinderContext;
+
+/*
+ * Walker to find a motion node that matches a particular motionID
+ */
+static bool
+ParallelFinderWalker(Node *node,
+				  void *context)
+{
+	Assert(context);
+	ParallelFinderContext *ctx = (ParallelFinderContext *) context;
+
+	if (node == NULL)
+		return false;
+
+	if (!is_plan_node(node))
+		return false;
+
+	Plan *plan = (Plan *) node;
+
+	if (plan->parallel > 1 || plan->parallel_aware)
+	{
+		ctx->has_parallel = true;
+		return true;	/* found our node; no more visit */
+	}
+
+	/* Continue walking */
+	return plan_tree_walker((Node*)node, ParallelFinderWalker, ctx, true);
+}
+
+/*
+ * plan_has_parallel
+ * Does plan has slice who is parallel?
+ */
+bool plan_has_parallel(PlannedStmt *plannedstmt)
+{
+	Plan *planTree = plannedstmt->planTree;
+	ParallelFinderContext ctx;
+	ctx.base.node = (Node*)plannedstmt;
+	ctx.has_parallel = false;
+	ParallelFinderWalker((Node *) planTree, &ctx);
+	return ctx.has_parallel;
+}
