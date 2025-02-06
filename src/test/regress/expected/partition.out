@@ -6653,3 +6653,28 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Check with other Partition syntax
 CREATE TABLE empty_partition2(i int, j int) DISTRIBUTED BY (i) PARTITION BY range(i);
+-- https://github.com/apache/cloudberry/issues/795
+CREATE TABLE t_issue_795_par (
+  name character varying,
+  last_modified_date timestamp without time zone
+)
+WITH (appendoptimized=true, orientation=column, compresslevel=1)
+DISTRIBUTED BY (name)
+PARTITION BY RANGE (last_modified_date)
+(
+    PARTITION partition_202411 START ('2024-11-01 00:00:00') INCLUSIVE END ('2024-12-01 00:00:00') EXCLUSIVE,
+    PARTITION partition_max START ('2024-12-01 00:00:00') INCLUSIVE END (MAXVALUE)
+);
+\d+ t_issue_795_par
+                                                                  Partitioned table "public.t_issue_795_par"
+       Column       |            Type             | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------------------+-----------------------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ name               | character varying           |           |          |         | extended |              | zlib             | 1                 | 32768      | 
+ last_modified_date | timestamp without time zone |           |          |         | plain    |              | zlib             | 1                 | 32768      | 
+Partition key: RANGE (last_modified_date)
+Partitions: t_issue_795_par_1_prt_partition_202411 FOR VALUES FROM ('Fri Nov 01 00:00:00 2024') TO ('Sun Dec 01 00:00:00 2024'),
+            t_issue_795_par_1_prt_partition_max FOR VALUES FROM ('Sun Dec 01 00:00:00 2024') TO (MAXVALUE)
+Distributed by: (name)
+Options: compresslevel=1
+
+DROP TABLE t_issue_795_par;

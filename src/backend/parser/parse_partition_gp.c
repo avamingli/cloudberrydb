@@ -566,27 +566,79 @@ initPartEveryIterator(ParseState *pstate, PartitionKeyData *partkey, const char 
 	if (end)
 	{
 		Const	   *endConst;
+		Node	*expr = end;
+		PartitionRangeDatum *prd = NULL;
 
-		endConst = transformPartitionBoundValue(pstate,
-												end,
-												part_col_name,
-												part_col_typid,
-												part_col_typmod,
-												part_col_collation);
-		if (endConst->constisnull)
-			ereport(ERROR,
-				(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-				 errmsg("cannot use NULL with range partition specification"),
-				 parser_errposition(pstate, exprLocation(end))));
+		/*
+		 * Infinite range bounds -- "minvalue" and "maxvalue" -- get passed in
+		 * as ColumnRefs.
+		 */
+		if (IsA(expr, ColumnRef))
+		{
+			ColumnRef  *cref = (ColumnRef *) expr;
+			char	   *cname = NULL;
 
-		if (endInclusive)
-			convert_exclusive_start_inclusive_end(endConst,
-												  part_col_typid, part_col_typmod,
-												  false);
-		if (endConst->constisnull)
+			/*
+			 * There should be a single field named either "minvalue" or
+			 * "maxvalue".
+			 */
+			if (list_length(cref->fields) == 1 &&
+				IsA(linitial(cref->fields), String))
+				cname = strVal(linitial(cref->fields));
+
+			if (cname == NULL)
+			{
+				/*
+				 * ColumnRef is not in the desired single-field-name form. For
+				 * consistency between all partition strategies, let the
+				 * expression transformation report any errors rather than
+				 * doing it ourselves.
+				 */
+			}
+			else if (strcmp("minvalue", cname) == 0)
+			{
+				/* FIXME: Cloud be possible when multiple multi-dimension? */
+				prd = makeNode(PartitionRangeDatum);
+				prd->kind = PARTITION_RANGE_DATUM_MINVALUE;
+				prd->value = NULL;
+			}
+			else if (strcmp("maxvalue", cname) == 0)
+			{
+				prd = makeNode(PartitionRangeDatum);
+				prd->kind = PARTITION_RANGE_DATUM_MAXVALUE;
+				prd->value = NULL;
+			}
+		}
+		if (prd)
+		{
+
+			end = (Node *) prd;
 			isEndValMaxValue = true;
 
-		endVal = endConst->constvalue;
+		}
+		else
+		{
+			endConst = transformPartitionBoundValue(pstate,
+													end,
+													part_col_name,
+													part_col_typid,
+													part_col_typmod,
+													part_col_collation);
+			if (endConst->constisnull)
+				ereport(ERROR,
+					(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+					 errmsg("cannot use NULL with range partition specification"),
+					 parser_errposition(pstate, exprLocation(end))));
+
+			if (endInclusive)
+				convert_exclusive_start_inclusive_end(endConst,
+													  part_col_typid, part_col_typmod,
+													  false);
+			if (endConst->constisnull)
+				isEndValMaxValue = true;
+
+			endVal = endConst->constvalue;
+		}
 	}
 
 	iter = palloc0(sizeof(PartEveryIterator));
@@ -685,6 +737,8 @@ initPartEveryIterator(ParseState *pstate, PartitionKeyData *partkey, const char 
 	iter->currStart = (Datum) 0;
 	iter->called = false;
 	iter->endReached = false;
+	if (iter->isEndValMaxValue)
+		iter->endReached = false;
 
 	iter->pstate = pstate;
 	iter->end_location = exprLocation(end);

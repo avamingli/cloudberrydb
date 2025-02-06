@@ -4230,3 +4230,19 @@ CREATE TABLE empty_partition(i int, j int) PARTITION BY range(i);
 
 -- Check with other Partition syntax
 CREATE TABLE empty_partition2(i int, j int) DISTRIBUTED BY (i) PARTITION BY range(i);
+
+-- https://github.com/apache/cloudberry/issues/795
+CREATE TABLE t_issue_795_par (
+  name character varying,
+  last_modified_date timestamp without time zone
+)
+WITH (appendoptimized=true, orientation=column, compresslevel=1)
+DISTRIBUTED BY (name)
+PARTITION BY RANGE (last_modified_date)
+(
+    PARTITION partition_202411 START ('2024-11-01 00:00:00') INCLUSIVE END ('2024-12-01 00:00:00') EXCLUSIVE,
+    PARTITION partition_max START ('2024-12-01 00:00:00') INCLUSIVE END (MAXVALUE)
+);
+
+\d+ t_issue_795_par
+DROP TABLE t_issue_795_par;
