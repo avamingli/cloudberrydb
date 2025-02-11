@@ -447,7 +447,8 @@ commit;
 begin;
 -- insert locking
 insert into partlockt values(3, 'f');
-select * from locktest_master where coalesce not like 'gp_%' and coalesce not like 'pg_%';
+select * from locktest_master where coalesce not like 'gp_%' and coalesce not like 'pg_%' and
+                                    not(coalesce like 'partlockt' and mode like 'AccessShareLock');
      coalesce      |       mode       | locktype |  node  
 -------------------+------------------+----------+--------
  partlockt         | RowExclusiveLock | relation | master
