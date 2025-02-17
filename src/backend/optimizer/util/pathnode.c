@@ -3622,9 +3622,9 @@ make_cdbpathlocus_for_foreign_relations(struct PlannerInfo   *root,
 		case FTEXECLOCATION_ALL_SEGMENTS:
 			server = GetForeignServer(rel->serverid);
 			if (server)
-				CdbPathLocus_MakeStrewn(&(pathnode->path.locus), server->num_segments);
+				CdbPathLocus_MakeStrewn(&(pathnode->path.locus), server->num_segments, 0);
 			else
-				CdbPathLocus_MakeStrewn(&(pathnode->path.locus), getgpsegmentCount());
+				CdbPathLocus_MakeStrewn(&(pathnode->path.locus), getgpsegmentCount(), 0);
 			break;
 		case FTEXECLOCATION_COORDINATOR:
 			CdbPathLocus_MakeEntry(&(pathnode->path.locus));
