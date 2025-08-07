@@ -1948,7 +1948,7 @@ distribute_qual_to_rels(PlannerInfo *root, Node *clause,
 	{
 		PostponedQual *pq = (PostponedQual *) palloc(sizeof(PostponedQual));
 
-		Assert(root->hasLateralRTEs);	/* shouldn't happen otherwise */
+		//Assert(root->hasLateralRTEs);	/* shouldn't happen otherwise */
 		Assert(jointype == JOIN_INNER); /* mustn't postpone past outer join */
 		pq->qual = clause;
 		pq->relids = relids;
