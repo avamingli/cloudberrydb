@@ -3202,114 +3202,115 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			sub_final_rel->pathlist = list_make1(sub_final_rel->cheapest_total_path);
 
 			cteplaninfo->subroot = subroot;
+			cteplaninfo->push_quals_possible = true;
 		}
 		else
 			subroot = cteplaninfo->subroot;
 
-
-		/* Also replace Vars with subquery's targetlist */
-		List *quals = collect_cte_quals(root, rel, rte, rel->relid, subquery);
-		cteplaninfo->rels = lappend(cteplaninfo->rels, rel);
-		cteplaninfo->relids = bms_add_member(cteplaninfo->relids, rel->relid);
-
-		// TODO: if quals is NIL, it means a cte ref need all the data from cte
-		if (quals != NIL)
+		if (cteplaninfo->push_quals_possible)
 		{
-			// Expr *and_clause;
-			//and_clause = (list_length(quals) == 1) ? linitial(quals) : make_andclause(quals);
-			cteplaninfo->list_quals = lappend(cteplaninfo->list_quals, make_andclause(quals));
-		}
+			/* Also replace Vars with subquery's targetlist */
+			List *quals = collect_cte_quals(root, rel, rte, rel->relid, subquery);
+			cteplaninfo->rels = lappend(cteplaninfo->rels, rel);
+			cteplaninfo->relids = bms_add_member(cteplaninfo->relids, rel->relid);
 
-		int num_rels = list_length(cteplaninfo->rels);
+			if (quals != NIL)
+				cteplaninfo->list_quals = lappend(cteplaninfo->list_quals, make_andclause(quals));
+			else
+				/* if quals is NIL, it means a cte ref need all the data from cte */
+				cteplaninfo->push_quals_possible = false;
 
-		if (num_rels == cte->cterefcount)
-		{
-			/* Do a second plan for shared cte. */
 
-			PlannerConfig *config = CopyPlannerConfig(root->config);
-
-			/*
-			 * Having multiple SharedScans can lead to deadlocks. For now,
-			 * disallow sharing of ctes at lower levels.
-			 */
-			config->gp_cte_sharing = false;
-
-			config->honor_order_by = false;
-
-			Expr *new_quals = convert_expr_to_cnf_complete(make_orclause(cteplaninfo->list_quals));
-
-			List *quals = make_ands_implicit(new_quals);
-
-			ListCell   *lc;
-			foreach(lc, quals)
+			if (cteplaninfo->push_quals_possible &&
+				(list_length(cteplaninfo->rels) == cte->cterefcount))
 			{
-				subquery_push_qual_1(cteplaninfo->subquery, cteplaninfo->relids, (Node *)lfirst(lc));
-			}
+				/* Do a second plan for shared cte. */
 
-			subroot = subquery_planner(cteroot->glob, cteplaninfo->subquery, cteroot, cte->cterecursive,
-										   tuple_fraction, config);
+				PlannerConfig *config = CopyPlannerConfig(root->config);
 
-			/* Select best Path and turn it into a Plan */
-			sub_final_rel = fetch_upper_rel(subroot, UPPERREL_FINAL, NULL);
+				/*
+				 * Having multiple SharedScans can lead to deadlocks. For now,
+				 * disallow sharing of ctes at lower levels.
+				 */
+				config->gp_cte_sharing = false;
 
-			/*
-			 * we cannot use different plans for different instances of this CTE
-			 * reference, so keep only the cheapest
-			 */
-			sub_final_rel->pathlist = list_make1(sub_final_rel->cheapest_total_path);
+				config->honor_order_by = false;
 
-			cteplaninfo->subroot = subroot;
+				Expr *new_quals = convert_expr_to_cnf_complete(make_orclause(cteplaninfo->list_quals));
 
-			Path *best_path = sub_final_rel->cheapest_total_path;
-			CdbPathLocus locus;
-			double		sub_total_rows;
+				List *quals = make_ands_implicit(new_quals);
 
-			if (!IS_DUMMY_REL(sub_final_rel))
-			{
-				double		numsegments;
-
-				if (CdbPathLocus_IsPartitioned(sub_final_rel->cheapest_total_path->locus))
-					numsegments = CdbPathLocus_NumSegments(sub_final_rel->cheapest_total_path->locus);
-				else
-					numsegments = 1;
-				sub_total_rows = sub_final_rel->cheapest_total_path->rows * numsegments;
-
-			}
-
-			foreach (lc, cteplaninfo->rels)
-			{
-				RelOptInfo *cte_rel = (RelOptInfo*) lfirst(lc);
-				Relids required_outer = cte_rel->lateral_relids;
-
-				if (IS_DUMMY_REL(sub_final_rel))
+				ListCell   *lc;
+				foreach(lc, quals)
 				{
-					set_dummy_rel_pathlist(root, cte_rel);
-					continue;
+					subquery_push_qual_1(cteplaninfo->subquery, cteplaninfo->relids, (Node *)lfirst(lc));
 				}
-				/* Mark rel with estimated output rows, width, etc */
-				set_cte_size_estimates(root, cte_rel, sub_total_rows);
 
-				locus = cdbpathlocus_from_subquery(root, cte_rel, best_path);
+				subroot = subquery_planner(cteroot->glob, cteplaninfo->subquery, cteroot, cte->cterecursive,
+											   tuple_fraction, config);
 
-				/* Convert subquery pathkeys to outer representation */
-				pathkeys = convert_subquery_pathkeys(root, cte_rel, best_path->pathkeys,
-													 make_tlist_from_pathtarget(best_path->pathtarget));
+				/* Select best Path and turn it into a Plan */
+				sub_final_rel = fetch_upper_rel(subroot, UPPERREL_FINAL, NULL);
 
-				cte_rel->subroot = subroot;
+				/*
+				 * we cannot use different plans for different instances of this CTE
+				 * reference, so keep only the cheapest one.
+				 */
+				sub_final_rel->pathlist = list_make1(sub_final_rel->cheapest_total_path);
 
-				/* truncate preivous path */
-				cte_rel->pathlist = NIL;
+				cteplaninfo->subroot = subroot;
 
-				/* Generate appropriate path */
-				add_path(cte_rel, create_ctescan_path(root,
-												  cte_rel,
-												  NULL /* is_shared */,
-												  locus,
-												  pathkeys,
-												  required_outer),
-						root);
+				Path *best_path = sub_final_rel->cheapest_total_path;
+				CdbPathLocus locus;
+				double		sub_total_rows;
+
+				if (!IS_DUMMY_REL(sub_final_rel))
+				{
+					double		numsegments;
+
+					if (CdbPathLocus_IsPartitioned(sub_final_rel->cheapest_total_path->locus))
+						numsegments = CdbPathLocus_NumSegments(sub_final_rel->cheapest_total_path->locus);
+					else
+						numsegments = 1;
+					sub_total_rows = sub_final_rel->cheapest_total_path->rows * numsegments;
+
+				}
+
+				foreach (lc, cteplaninfo->rels)
+				{
+					RelOptInfo *cte_rel = (RelOptInfo*) lfirst(lc);
+					Relids required_outer = cte_rel->lateral_relids;
+
+					if (IS_DUMMY_REL(sub_final_rel))
+					{
+						set_dummy_rel_pathlist(root, cte_rel);
+						continue;
+					}
+					/* Mark rel with estimated output rows, width, etc */
+					set_cte_size_estimates(root, cte_rel, sub_total_rows);
+
+					locus = cdbpathlocus_from_subquery(root, cte_rel, best_path);
+
+					/* Convert subquery pathkeys to outer representation */
+					pathkeys = convert_subquery_pathkeys(root, cte_rel, best_path->pathkeys,
+														 make_tlist_from_pathtarget(best_path->pathtarget));
+
+					cte_rel->subroot = subroot;
+
+					/* truncate preivous path */
+					cte_rel->pathlist = NIL;
+
+					/* Generate appropriate path */
+					add_path(cte_rel, create_ctescan_path(root,
+													  cte_rel,
+													  NULL /* is_shared */,
+													  locus,
+													  pathkeys,
+													  required_outer),
+							root);
+				}
+				return;
 			}
-			return;
 		}
 	}
 	rel->subroot = subroot;

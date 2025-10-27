@@ -534,6 +534,8 @@ typedef struct CtePlanInfo
 
 	Relids relids;
 	
+	bool push_quals_possible;
+	
 	Query *subquery;
 } CtePlanInfo;
 
