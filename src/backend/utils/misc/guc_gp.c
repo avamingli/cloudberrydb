@@ -1883,8 +1883,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	{
 		{"gp_eager_two_phase_agg", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Eager two stage agg."),
-			NULL,
-			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+			NULL
 		},
 		&gp_eager_two_phase_agg,
 		false, NULL, NULL
