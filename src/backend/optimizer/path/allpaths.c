@@ -3203,6 +3203,14 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 
 			cteplaninfo->subroot = subroot;
 			cteplaninfo->push_quals_possible = true;
+			if (sub_final_rel->cheapest_total_path->rows >= 10 * cte->cterefcount * sub_final_rel->cheapest_total_path->total_cost)
+			{
+				root->config->gp_cte_sharing = false;
+				cteplaninfo->push_quals_possible = false;
+				cteplaninfo->subroot = NULL;
+				cte->ctematerialized = CTEMaterializeNever;
+				is_shared = false;
+			}
 		}
 		else
 			subroot = cteplaninfo->subroot;
