@@ -2828,7 +2828,29 @@ agg_refill_hash_table(AggState *aggstate)
 	/* free memory and reset hash tables */
 	ReScanExprContext(aggstate->hashcontext);
 	for (int setno = 0; setno < aggstate->num_hashes; setno++)
-		ResetTupleHashTable(aggstate->perhash[setno].hashtable);
+	{
+		TupleHashTable hashtable = aggstate->perhash[setno].hashtable;
+		/*
+		 * Check the memory limitation.
+		 *
+		 * If hashtable memory exceeds the memory limitation, shrink the hashtable to the half
+		 * of current size to free memory which will be used later.
+		 */
+		if (hashtable->hashtab->size * sizeof(TupleHashEntryData) >= aggstate->hash_mem_limit)
+		{
+			/*
+			 * Hashtable creation uses fill factor to determine the new hashtable size, so we pass
+			 * 1/4 of original hashtable size as input size. Throught the size computation, the new
+			 * size is 1/2 of original hashtable size.
+			 */
+			uint64 size = hashtable->hashtab->size / 4;
+			DestroyTupleHashTable(hashtable);
+			aggstate->perhash[setno].hashtable->hashtab = tuplehash_create(aggstate->hash_metacxt,
+															size, hashtable);
+			continue;
+		}
+		ResetTupleHashTable(hashtable);
+	}
 
 	aggstate->hash_ngroups_current = 0;
 
