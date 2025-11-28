@@ -214,6 +214,20 @@ static Plan *cdb_insert_result_node(PlannerInfo *root,
 static bool cdb_extract_plan_dependencies_walker(Node *node,
 									 cdb_extract_plan_dependencies_context *context);
 
+static CtePlanInfo *
+get_cte_plan_info(PlannerInfo *root, Index scanrelid);
+
+typedef struct CteAttrMapContext
+{
+	const AttrNumber *newattno; /* The mapping table to remap the varattno */
+} CteAttrMapContext;
+
+static bool
+change_varattnos_of_ShareInputScan_walker(Node *node, const CteAttrMapContext *attrMapCxt);
+
+static void
+change_varattnos_of_ShareInputScan(Node *node, const AttrNumber *newattno);
+
 #ifdef USE_ASSERT_CHECKING
 #include "cdb/cdbplan.h"
 
@@ -1570,6 +1584,96 @@ set_indexonlyscan_references(PlannerInfo *root,
 	return (Plan *) plan;
 }
 
+CtePlanInfo *
+get_cte_plan_info(PlannerInfo *root, Index scanrelid)
+{
+	CtePlanInfo *cteplaninfo;
+	PlannerInfo *cteroot;
+	Index		levelsup;
+	int			planinfo_id;
+	int			ndx;
+	ListCell   *lc;
+
+	RangeTblEntry *rte = rt_fetch(scanrelid, root->glob->finalrtable);
+	Assert(rte);
+	Assert(rte->rtekind == RTE_CTE);
+
+	levelsup = rte->ctelevelsup;
+	cteroot = root;
+	while (levelsup-- > 0)
+	{
+		cteroot = cteroot->parent_root;
+		if (!cteroot)			/* shouldn't happen */
+			elog(ERROR, "bad levelsup for CTE \"%s\"", rte->ctename);
+	}
+
+	ndx = 0;
+	foreach(lc, cteroot->parse->cteList)
+	{
+		CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+
+		if (strcmp(cte->ctename, rte->ctename) == 0)
+			break;
+		ndx++;
+	}
+	if (lc == NULL)				/* shouldn't happen */
+		elog(ERROR, "could not find CTE \"%s\"", rte->ctename);
+
+	/*
+	 * In PostgreSQL, we use the index to look up the plan ID in the
+	 * cteroot->cte_plan_ids list. In GPDB, CTE plans work differently, and
+	 * we look up the CtePlanInfo struct in the list_cteplaninfo instead.
+	 */
+	planinfo_id = ndx;
+
+	if (planinfo_id < 0 || planinfo_id >= list_length(cteroot->list_cteplaninfo))
+		elog(ERROR, "could not find plan for CTE \"%s\"", rte->ctename);
+
+	Assert(list_length(cteroot->list_cteplaninfo) > planinfo_id);
+	cteplaninfo = list_nth(cteroot->list_cteplaninfo, planinfo_id);
+
+	return cteplaninfo;
+}
+
+/*
+ * Remaps the varattno of a varattno in a Var node using an attribute map.
+ */
+static bool
+change_varattnos_of_ShareInputScan_walker(Node *node, const CteAttrMapContext *attrMapCxt)
+{
+	if (node == NULL)
+		return false;
+	if (IsA(node, Var))
+	{
+		Var		   *var = (Var *) node;
+
+		if (var->varlevelsup == 0 &&
+			var->varattno > 0)
+		{
+			/*
+			 * ??? the following may be a problem when the node is multiply
+			 * referenced though stringToNode() doesn't create such a node
+			 * currently.
+			 */
+			Assert(attrMapCxt->newattno[var->varattno - 1] > 0);
+			var->varattno = var->varattnosyn = attrMapCxt->newattno[var->varattno - 1];
+		}
+		return false;
+	}
+	return expression_tree_walker(node, change_varattnos_of_ShareInputScan_walker,
+								  (void *) attrMapCxt);
+}
+
+static void
+change_varattnos_of_ShareInputScan(Node *node, const AttrNumber *newattno)
+{
+	CteAttrMapContext attrMapCxt;
+
+	attrMapCxt.newattno = newattno;
+
+	(void) change_varattnos_of_ShareInputScan_walker(node, &attrMapCxt);
+}
+
 /*
  * set_subqueryscan_references
  *		Do set_plan_references processing on a SubqueryScan
@@ -1584,6 +1688,7 @@ set_subqueryscan_references(PlannerInfo *root,
 {
 	RelOptInfo *rel;
 	Plan	   *result;
+	bool is_producer = false;
 
 	/* Need to look up the subquery's RelOptInfo, since we need its subroot */
 	rel = find_base_rel(root, plan->scan.scanrelid);
@@ -1609,7 +1714,68 @@ set_subqueryscan_references(PlannerInfo *root,
 		 */
 		plan->scan.scanrelid += rtoffset;
 
-		//Assert(plan->scan.scanrelid <= list_length(glob->finalrtable) && "Scan node's relid is outside the finalrtable!");
+		
+		if (IsA(plan->subplan, ShareInputScan))
+		{
+			Plan* lefttree = plan->subplan->lefttree;
+			is_producer = lefttree != NULL;
+
+			CtePlanInfo *cteplaninfo = get_cte_plan_info(root, plan->scan.scanrelid);
+
+				/*
+				 * Subquery [attno: 5]
+				 *	-> ShareInputScan arrno[1, 2, 3, 4, 5]
+				 *		->lefttree attrno [1, 2, 3, 4, 5]
+				 *
+				 *
+				 * Subquery [attno: 1]
+				 *	-> ShareInputScan arrno[1]
+				 * 		-> Result [attno: 5]
+				 *			->lefttree attrno [1, 2, 3, 4, 5]
+				 */
+
+				List *new_tlist = NIL;
+				
+				ListCell *lc;
+				foreach(lc, plan->subplan->targetlist)
+				{
+					TargetEntry *tle = (TargetEntry*) lfirst(lc);
+					AttrNumber new_resno = cteplaninfo->attr_map->attnums[tle->resno - 1];
+					if (new_resno != 0)
+					{
+						// we need this column
+						TargetEntry *newtle = flatCopyTargetEntry(tle);
+						newtle->resno = new_resno;
+						newtle->ressortgroupref = 0 ;
+						Var *new_var = (Var *)copyObject(tle->expr);
+						newtle->expr = (Expr *) new_var;
+						new_tlist = lappend(new_tlist, newtle);
+					}
+				}
+
+			if (is_producer)
+			{
+				/* insert result node */
+				Plan	   *resultplan;
+    			resultplan = (Plan *) make_result(new_tlist, NULL, plan->subplan->lefttree);
+				resultplan->flow = plan->subplan->lefttree->flow;
+
+				plan->subplan->lefttree = resultplan;
+				/* we must update the shared plan for correct tlist used later. */
+				root->glob->share.shared_plans[((ShareInputScan*)plan->subplan)->share_id] = resultplan;
+			}
+
+			plan->subplan->targetlist = copyObject(new_tlist);
+			foreach(lc, plan->subplan->targetlist)
+			{
+				TargetEntry *tle = (TargetEntry*) lfirst(lc);
+				Var *var = (Var *)tle->expr;
+				var->varattno = tle->resno;
+			}
+
+			change_varattnos_of_ShareInputScan((Node *) plan->scan.plan.targetlist, cteplaninfo->attr_map->attnums);
+			change_varattnos_of_ShareInputScan((Node *) plan->scan.plan.qual, cteplaninfo->attr_map->attnums);
+		}
 
 		plan->scan.plan.targetlist =
 			fix_scan_list(root, plan->scan.plan.targetlist,
@@ -1617,6 +1783,63 @@ set_subqueryscan_references(PlannerInfo *root,
 		plan->scan.plan.qual =
 			fix_scan_list(root, plan->scan.plan.qual,
 						  rtoffset, NUM_EXEC_QUAL((Plan *) plan));
+		
+
+		if (IsA(plan->subplan, ShareInputScan))
+		{
+			/* after fix_scan_list, the vano could be changed to subquery, we need to adjust the columns for explain */
+			CtePlanInfo *cteplaninfo = get_cte_plan_info(root, plan->scan.scanrelid);
+			RangeTblEntry *rte = rt_fetch(plan->scan.scanrelid, root->glob->finalrtable);
+
+			Assert(cteplaninfo->attr_map->maplen == list_length(rte->eref->colnames));
+
+			ListCell *lc;
+			List *new_colnames1 = NIL;
+			List *new_colnames2 = NIL;
+			int i = 0;
+			foreach(lc, rte->eref->colnames)
+			{
+				Alias *alias = (Alias*) lfirst(lc); 
+				if (cteplaninfo->attr_map->attnums[i] != 0)
+					new_colnames1 = lappend(new_colnames1, copyObject(alias));
+				else
+					new_colnames2 = lappend(new_colnames2, copyObject(alias));
+				i++;
+			}
+			rte->eref->colnames = list_concat(new_colnames1, new_colnames2);
+		}
+
+		if (is_producer)
+		{
+			/* If we are producer, correct the width of Results and ShareInputsScan */
+			Assert(IsA(plan->subplan->lefttree, Result));
+			Plan *dest = plan->subplan->lefttree;
+			Plan *src = plan->subplan->lefttree->lefttree;
+			dest->startup_cost = src->startup_cost;
+			dest->total_cost = src->total_cost;
+			dest->plan_rows = src->plan_rows;
+			dest->parallel_aware = false;
+			dest->parallel_safe = src->parallel_safe;
+			/* We have done projecton here, use the width of subquery */
+			dest->plan_width = plan->scan.plan.plan_width;
+
+			/* as well as the ShareInputScan node */
+			plan->subplan->plan_width = plan->scan.plan.plan_width;
+		}
+		else
+		{
+			/* correct the width of ShareInputsScan */
+			/* as well as the ShareInputScan node */
+			plan->subplan->plan_width = plan->scan.plan.plan_width;
+		}
+
+		ListCell *lc1, *lc2;
+		forboth(lc1, plan->scan.plan.targetlist, lc2, plan->subplan->targetlist)
+		{
+			TargetEntry * tle1 = (TargetEntry*) lfirst(lc1);
+			TargetEntry * tle2 = (TargetEntry*) lfirst(lc2);
+			tle1->resname = tle2->resname;
+		}
 
 		result = (Plan *) plan;
 	}

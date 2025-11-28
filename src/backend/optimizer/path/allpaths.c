@@ -65,6 +65,8 @@
 
 #include "optimizer/optimizer.h"
 
+#include "access/attmap.h"
+
 // TODO: these planner gucs need to be refactored into PlannerConfig.
 bool		gp_enable_sort_limit = false;
 
@@ -179,6 +181,9 @@ collect_cte_quals(PlannerInfo *root, RelOptInfo *rel,
 				   RangeTblEntry *rte, Index rti, Query *subquery);
 
 static void subquery_push_qual_1(Query *subquery, Relids relids, Node *qual);
+
+static void
+remove_cte_unused_subquery_outputs(CtePlanInfo * cteplaninfo);
 
 /*
  * make_one_rel
@@ -3215,7 +3220,21 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		else
 			subroot = cteplaninfo->subroot;
 
-		if (cteplaninfo->push_quals_possible)
+		// collect, tlist, joininfo, baserestrioninfo
+		Bitmapset  *attrs_used = NULL;
+		pull_varattnos((Node *)rel->reltarget->exprs, rel->relid, &attrs_used);
+		foreach(lc, rel->baserestrictinfo)
+		{
+			RestrictInfo *rinfo = (RestrictInfo *) lfirst(lc);
+
+			pull_varattnos((Node *) rinfo->clause, rel->relid, &attrs_used);
+		}
+		cteplaninfo->attrs_used = bms_union(cteplaninfo->attrs_used, attrs_used);
+
+
+		//TODO: no OR quals share should also remove unused columns
+		if (cteplaninfo->push_quals_possible ||
+			bms_num_members(cteplaninfo->attrs_used) != list_length(cteplaninfo->subquery->targetList))
 		{
 			/* Also replace Vars with subquery's targetlist */
 			List *quals = collect_cte_quals(root, rel, rte, rel->relid, subquery);
@@ -3225,12 +3244,16 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			if (quals != NIL)
 				cteplaninfo->list_quals = lappend(cteplaninfo->list_quals, make_andclause(quals));
 			else
+			{
 				/* if quals is NIL, it means a cte ref need all the data from cte */
 				cteplaninfo->push_quals_possible = false;
+				cteplaninfo->list_quals = NIL;
+			}
 
 
-			if (cteplaninfo->push_quals_possible &&
-				(list_length(cteplaninfo->rels) == cte->cterefcount))
+			if (list_length(cteplaninfo->rels) == cte->cterefcount &&
+				(cteplaninfo->push_quals_possible ||
+				bms_num_members(cteplaninfo->attrs_used) != list_length(cteplaninfo->subquery->targetList)))
 			{
 				/* Do a second plan for shared cte. */
 
@@ -3244,17 +3267,24 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 
 				config->honor_order_by = false;
 
-				Expr *new_quals = convert_expr_to_cnf_complete(make_orclause(cteplaninfo->list_quals));
-
-				List *quals = make_ands_implicit(new_quals);
-
-				ListCell   *lc;
-				// hack to make varno = 1 in bms
-				cteplaninfo->relids = bms_add_member(cteplaninfo->relids, 1);
-				foreach(lc, quals)
+				if (cteplaninfo->push_quals_possible)
 				{
-					subquery_push_qual_1(cteplaninfo->subquery, cteplaninfo->relids, (Node *)lfirst(lc));
+					Expr *new_quals = convert_expr_to_cnf_complete(make_orclause(cteplaninfo->list_quals));
+
+					List *quals = make_ands_implicit(new_quals);
+
+					ListCell   *lc;
+					// hack to make varno = 1 in bms
+					cteplaninfo->relids = bms_add_member(cteplaninfo->relids, 1);
+					foreach(lc, quals)
+					{
+						subquery_push_qual_1(cteplaninfo->subquery, cteplaninfo->relids, (Node *)lfirst(lc));
+					}
 				}
+
+				// remove unused columns
+				if (bms_num_members(cteplaninfo->attrs_used) != list_length(cteplaninfo->subquery->targetList))
+					remove_cte_unused_subquery_outputs(cteplaninfo);
 
 				subroot = subquery_planner(cteroot->glob, cteplaninfo->subquery, cteroot, cte->cterecursive,
 											   tuple_fraction, config);
@@ -4787,6 +4817,73 @@ recurse_push_qual(Node *setOp, Query *topquery,
 /*****************************************************************************
  *			SIMPLIFYING SUBQUERY TARGETLISTS
  *****************************************************************************/
+
+static void
+remove_cte_unused_subquery_outputs(CtePlanInfo * cteplaninfo)
+{
+	ListCell   *lc;
+	AttrMap    *attrMap;
+	Query *subquery = cteplaninfo->subquery;
+	Bitmapset *attrs_used = cteplaninfo->attrs_used;
+	int new_resno = 1;
+
+	attrMap = make_attrmap(list_length(subquery->targetList));
+
+	// TODO: remove subquery output
+
+ 	foreach(lc, subquery->targetList)
+ 	{
+ 		TargetEntry *tle = (TargetEntry *) lfirst(lc);
+ 		Node	   *texpr = (Node *) tle->expr;
+ 
+ 
+ 		if (!bms_is_member(tle->resno - FirstLowInvalidHeapAttributeNumber, attrs_used))
+		{
+			attrMap->attnums[tle->resno - 1] = 0; // no upper need this
+		}
+		else
+		{
+			attrMap->attnums[tle->resno - 1] = new_resno;
+			new_resno++;
+			//new_tlist = lappend(new_tlist, (TargetEntry *) copyObject(tle));
+			continue;
+		}
+
+ 		/*
+ 		 * If it has a sortgroupref number, it's used in some sort/group
+ 		 * clause so we'd better not remove it.  Also, don't remove any
+ 		 * resjunk columns, since their reason for being has nothing to do
+ 		 * with anybody reading the subquery's output.  (It's likely that
+ 		 * resjunk columns in a sub-SELECT would always have ressortgroupref
+ 		 * set, but even if they don't, it seems imprudent to remove them.)
+ 		 */
+ 		if (tle->ressortgroupref || tle->resjunk)
+ 			continue;
+
+ 		if (subquery->setOperations)
+ 			continue;
+ 
+ 		if (subquery->distinctClause && !subquery->hasDistinctOn)
+ 			continue;
+
+ 		if (subquery->hasTargetSRFs &&
+ 			expression_returns_set(texpr))
+ 			continue;
+ 
+ 		if (contain_volatile_functions(texpr))
+ 			continue;
+ 
+ 		/*
+ 		 * OK, we don't need it.  Replace the expression with a NULL constant.
+ 		 * Preserve the exposed type of the expression, in case something
+ 		 * looks at the rowtype of the subquery's result.
+ 		 */
+ 		tle->expr = (Expr *) makeNullConst(exprType(texpr),
+ 										   exprTypmod(texpr),
+ 										   exprCollation(texpr));
+	}
+	cteplaninfo->attr_map = attrMap;
+}
 
 /*
  * remove_unused_subquery_outputs

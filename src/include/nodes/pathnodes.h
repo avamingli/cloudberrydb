@@ -27,6 +27,7 @@
 #include "cdb/cdbpathlocus.h"
 #include "foreign/foreign.h"
 
+#include "access/attmap.h"
 
 /*
  * Relids
@@ -535,6 +536,9 @@ typedef struct CtePlanInfo
 	Relids relids;
 	
 	bool push_quals_possible;
+	
+	Bitmapset	*attrs_used;
+	AttrMap 	*attr_map;
 	
 	Query *subquery;
 } CtePlanInfo;
