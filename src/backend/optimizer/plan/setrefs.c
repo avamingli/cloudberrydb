@@ -1650,11 +1650,6 @@ change_varattnos_of_ShareInputScan_walker(Node *node, const CteAttrMapContext *a
 		if (var->varlevelsup == 0 &&
 			var->varattno > 0)
 		{
-			/*
-			 * ??? the following may be a problem when the node is multiply
-			 * referenced though stringToNode() doesn't create such a node
-			 * currently.
-			 */
 			Assert(attrMapCxt->newattno[var->varattno - 1] > 0);
 			var->varattno = var->varattnosyn = attrMapCxt->newattno[var->varattno - 1];
 		}
@@ -1714,44 +1709,44 @@ set_subqueryscan_references(PlannerInfo *root,
 		 */
 		plan->scan.scanrelid += rtoffset;
 
-		
+		CtePlanInfo *cteplaninfo = NULL;
 		if (IsA(plan->subplan, ShareInputScan))
+			cteplaninfo = get_cte_plan_info(root, plan->scan.scanrelid);
+
+		if (IsA(plan->subplan, ShareInputScan) &&
+			(cteplaninfo->attr_map != NULL))
 		{
 			Plan* lefttree = plan->subplan->lefttree;
 			is_producer = lefttree != NULL;
 
-			CtePlanInfo *cteplaninfo = get_cte_plan_info(root, plan->scan.scanrelid);
-
-				/*
-				 * Subquery [attno: 5]
-				 *	-> ShareInputScan arrno[1, 2, 3, 4, 5]
-				 *		->lefttree attrno [1, 2, 3, 4, 5]
-				 *
-				 *
-				 * Subquery [attno: 1]
-				 *	-> ShareInputScan arrno[1]
-				 * 		-> Result [attno: 5]
-				 *			->lefttree attrno [1, 2, 3, 4, 5]
-				 */
-
-				List *new_tlist = NIL;
-				
-				ListCell *lc;
-				foreach(lc, plan->subplan->targetlist)
+			/*
+			 * Subquery [attno: 5]
+			 *	-> ShareInputScan arrno[1, 2, 3, 4, 5]
+			 *		->lefttree attrno [1, 2, 3, 4, 5]
+			 *
+			 *
+			 * Subquery [attno: 1]
+			 *	-> ShareInputScan arrno[1]
+			 * 		-> Result [attno: 5]
+			 *			->lefttree attrno [1, 2, 3, 4, 5]
+			 */
+			List *new_tlist = NIL;
+			ListCell *lc;
+			foreach(lc, plan->subplan->targetlist)
+			{
+				TargetEntry *tle = (TargetEntry*) lfirst(lc);
+				AttrNumber new_resno = cteplaninfo->attr_map->attnums[tle->resno - 1];
+				if (new_resno != 0)
 				{
-					TargetEntry *tle = (TargetEntry*) lfirst(lc);
-					AttrNumber new_resno = cteplaninfo->attr_map->attnums[tle->resno - 1];
-					if (new_resno != 0)
-					{
-						// we need this column
-						TargetEntry *newtle = flatCopyTargetEntry(tle);
-						newtle->resno = new_resno;
-						newtle->ressortgroupref = 0 ;
-						Var *new_var = (Var *)copyObject(tle->expr);
-						newtle->expr = (Expr *) new_var;
-						new_tlist = lappend(new_tlist, newtle);
-					}
+					// we need this column
+					TargetEntry *newtle = flatCopyTargetEntry(tle);
+					newtle->resno = new_resno;
+					newtle->ressortgroupref = 0 ;
+					Var *new_var = (Var *)copyObject(tle->expr);
+					newtle->expr = (Expr *) new_var;
+					new_tlist = lappend(new_tlist, newtle);
 				}
+			}
 
 			if (is_producer)
 			{
@@ -1773,7 +1768,26 @@ set_subqueryscan_references(PlannerInfo *root,
 				var->varattno = tle->resno;
 			}
 
-			change_varattnos_of_ShareInputScan((Node *) plan->scan.plan.targetlist, cteplaninfo->attr_map->attnums);
+			foreach(lc, plan->scan.plan.targetlist)
+			{
+				TargetEntry *tle = (TargetEntry*) lfirst(lc);
+				Var *var = (Var*)tle->expr;
+				/* resno, attno: (1, 1), (2, 2), (3, 3), (4, 4), (5, 5) */
+				/* used attno: 2, 4 */
+				/* resno, attno: (1, null), (2, 1), (3, null), (4, 2), (5, null) */
+
+				if (cteplaninfo->attr_map->attnums[var->varattno- 1])
+				{
+					var->varattno = cteplaninfo->attr_map->attnums[var->varattno- 1];
+				}
+				else
+				{
+					// make nulls
+					tle->expr = (Expr *) makeNullConst(exprType((Node*) var),
+													   exprTypmod((Node*)var),
+													   exprCollation((Node*)var));
+				}
+			}
 			change_varattnos_of_ShareInputScan((Node *) plan->scan.plan.qual, cteplaninfo->attr_map->attnums);
 		}
 
@@ -1785,7 +1799,8 @@ set_subqueryscan_references(PlannerInfo *root,
 						  rtoffset, NUM_EXEC_QUAL((Plan *) plan));
 		
 
-		if (IsA(plan->subplan, ShareInputScan))
+		if (IsA(plan->subplan, ShareInputScan) &&
+			(cteplaninfo->attr_map != NULL))
 		{
 			/* after fix_scan_list, the vano could be changed to subquery, we need to adjust the columns for explain */
 			CtePlanInfo *cteplaninfo = get_cte_plan_info(root, plan->scan.scanrelid);
@@ -1807,39 +1822,43 @@ set_subqueryscan_references(PlannerInfo *root,
 				i++;
 			}
 			rte->eref->colnames = list_concat(new_colnames1, new_colnames2);
+			//rte->eref->colnames = new_colnames1;
 		}
 
-		if (is_producer)
+		if (cteplaninfo && cteplaninfo->attr_map != NULL)
 		{
-			/* If we are producer, correct the width of Results and ShareInputsScan */
-			Assert(IsA(plan->subplan->lefttree, Result));
-			Plan *dest = plan->subplan->lefttree;
-			Plan *src = plan->subplan->lefttree->lefttree;
-			dest->startup_cost = src->startup_cost;
-			dest->total_cost = src->total_cost;
-			dest->plan_rows = src->plan_rows;
-			dest->parallel_aware = false;
-			dest->parallel_safe = src->parallel_safe;
-			/* We have done projecton here, use the width of subquery */
-			dest->plan_width = plan->scan.plan.plan_width;
+			if (is_producer)
+			{
+				/* If we are producer, correct the width of Results and ShareInputsScan */
+				Assert(IsA(plan->subplan->lefttree, Result));
+				Plan *dest = plan->subplan->lefttree;
+				Plan *src = plan->subplan->lefttree->lefttree;
+				dest->startup_cost = src->startup_cost;
+				dest->total_cost = src->total_cost;
+				dest->plan_rows = src->plan_rows;
+				dest->parallel_aware = false;
+				dest->parallel_safe = src->parallel_safe;
+				/* We have done projecton here, use the width of subquery */
+				dest->plan_width = plan->scan.plan.plan_width;
 
-			/* as well as the ShareInputScan node */
-			plan->subplan->plan_width = plan->scan.plan.plan_width;
-		}
-		else
-		{
-			/* correct the width of ShareInputsScan */
-			/* as well as the ShareInputScan node */
-			plan->subplan->plan_width = plan->scan.plan.plan_width;
+				/* as well as the ShareInputScan node */
+				plan->subplan->plan_width = plan->scan.plan.plan_width;
+			}
+			else
+			{
+				/* correct the width of ShareInputsScan */
+				/* as well as the ShareInputScan node */
+				plan->subplan->plan_width = plan->scan.plan.plan_width;
+			}
 		}
 
-		ListCell *lc1, *lc2;
-		forboth(lc1, plan->scan.plan.targetlist, lc2, plan->subplan->targetlist)
-		{
-			TargetEntry * tle1 = (TargetEntry*) lfirst(lc1);
-			TargetEntry * tle2 = (TargetEntry*) lfirst(lc2);
-			tle1->resname = tle2->resname;
-		}
+		//ListCell *lc1, *lc2;
+		//forboth(lc1, plan->scan.plan.targetlist, lc2, plan->subplan->targetlist)
+		//{
+		//	TargetEntry * tle1 = (TargetEntry*) lfirst(lc1);
+		//	TargetEntry * tle2 = (TargetEntry*) lfirst(lc2);
+		//	tle1->resname = tle2->resname;
+		//}
 
 		result = (Plan *) plan;
 	}
