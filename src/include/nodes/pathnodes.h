@@ -508,6 +508,7 @@ struct PlannerInfo
 	bool		is_from_orca; /* true if this PlannerInfo was created from Orca*/
 
 	Query	   *aqumv_raw_parse;	/* Raw parse tree for AQUMV join exact-match */
+	bool 		is_shared_scan; /* true for shared scan */
 };
 
 /*

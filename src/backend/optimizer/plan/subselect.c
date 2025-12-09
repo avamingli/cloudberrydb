@@ -124,6 +124,20 @@ static bool contain_outer_selfref_walker(Node *node, Index *depth);
 
 static bool splan_is_initplan(List *plan_params, SubLinkType subLinkType);
 
+typedef struct
+{
+	plan_tree_base_prefix base; /* Required prefix for
+								 * plan_tree_walker/mutator */
+	Bitmapset            *seen_subplans;
+	bool                  result;
+} contain_ShareInputScan_walk_context;
+
+static bool contain_ShareInputScan(PlannerInfo *root, Node *node);
+
+static bool
+contain_ShareInputScan_walk(Node *node, contain_ShareInputScan_walk_context *ctx);
+
+
 /*
  * Get the datatype/typmod/collation of the first column of the plan's output.
  *
@@ -375,20 +389,10 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
 		config->is_under_subplan = true;
-
-		/*
-		 * Disable CTE sharing in subplan.
-		 *
-		 * fixup_subplans() copys duplicate subplan (subplan with same
-		 * plan_id), but doesn't copy the subroot.
-		 * If enable cte sharing here, it leads to mismatch of the length
-		 * of subplans and subroots. And apply_shareinput_xslice() cannot
-		 * make it correct when shared scan is in subplan, then an assert
-		 * (or panic) error will happen in init_tuplestore_state().
-		 *
-		 * See github issue: https://github.com/greenplum-db/gpdb/issues/12701
-		 */
-		config->gp_cte_sharing = false;
+		config->gp_cte_sharing = config->gp_cte_sharing ? !(subLinkType == ROWCOMPARE_SUBLINK ||
+															subLinkType == ARRAY_SUBLINK ||
+															subLinkType == MULTIEXPR_SUBLINK ||
+															subLinkType == EXISTS_SUBLINK) : config->gp_cte_sharing;
 	}
 	/*
 	 * Strictly speaking, the order of rows in a subquery doesn't matter.
@@ -464,6 +468,9 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 
 	set_allow_append_initplan_for_function_scan();
 	Assert(get_allow_append_initplan_for_function_scan() == true);
+
+	/* if we are a shared scan */
+	subroot->is_shared_scan = contain_ShareInputScan(subroot, (Node*) plan);
 
 	/* And convert to SubPlan or InitPlan format. */
 	result = build_subplan(root, plan, subroot, plan_params,
@@ -561,6 +568,7 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 	SubPlan    *splan;
 	ListCell   *lc;
 	Bitmapset  *plan_param_set;
+	bool 		subplan_is_shared_scan = subroot->is_shared_scan;
 
 	/*
 	 * Initialize the SubPlan node.  Note plan_id, plan_name, and cost fields
@@ -632,7 +640,7 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		splan->is_initplan = true;
 		result = (Node *) prm;
 	}
-	else if (splan->parParam == NIL && subLinkType == EXPR_SUBLINK)
+	else if (splan->parParam == NIL && subLinkType == EXPR_SUBLINK && !subplan_is_shared_scan)
 	{
 		TargetEntry *te = linitial(plan->targetlist);
 		Param	   *prm;
@@ -3577,3 +3585,53 @@ splan_is_initplan(List *plan_params, SubLinkType subLinkType)
 		return true;
 	return false;
 }
+
+static bool contain_ShareInputScan(PlannerInfo *root, Node *node)
+{
+	contain_ShareInputScan_walk_context ctx;
+	planner_init_plan_tree_base(&ctx.base, root);
+	ctx.result = false;
+	ctx.seen_subplans = NULL;
+
+	(void) contain_ShareInputScan_walk(node, &ctx);
+
+	return ctx.result;
+}
+
+static bool
+contain_ShareInputScan_walk(Node *node, contain_ShareInputScan_walk_context *ctx)
+{
+	PlannerInfo *root = (PlannerInfo *) ctx->base.node;
+
+	if (ctx->result)
+		return true;
+
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, SubPlan))
+	{
+		SubPlan	   *spexpr = (SubPlan *) node;
+		int			plan_id = spexpr->plan_id;
+
+		if (!bms_is_member(plan_id, ctx->seen_subplans))
+		{
+			ctx->seen_subplans = bms_add_member(ctx->seen_subplans, plan_id);
+
+			if (spexpr->is_initplan)
+				return false;
+
+			Plan *plan = list_nth(root->glob->subplans, plan_id - 1);
+			return plan_tree_walker((Node *) plan, contain_ShareInputScan_walk, ctx, true);
+		}
+	}
+
+	if (IsA(node, ShareInputScan))
+	{
+		ctx->result = true;
+		return true;
+	}
+
+	return plan_tree_walker((Node *) node, contain_ShareInputScan_walk, ctx, true);
+}
+

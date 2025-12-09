@@ -3216,6 +3216,7 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 				cte->ctematerialized = CTEMaterializeNever;
 				is_shared = false;
 			}
+			subroot->is_shared_scan = is_shared;
 		}
 		else
 			subroot = cteplaninfo->subroot;
