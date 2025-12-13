@@ -1691,7 +1691,14 @@ set_subqueryscan_references(PlannerInfo *root,
 	/* Recursively process the subplan */
 	plan->subplan = set_plan_references(rel->subroot, plan->subplan);
 
-	if (trivial_subqueryscan(plan))
+	if (IsA(plan->subplan, ShareInputScan) &&
+		(plan->subplan->lefttree != NULL))
+	{
+		is_producer = true;
+	}
+
+	/* Producer needs to insert Result node, so don't omit here. */
+	if (!is_producer && trivial_subqueryscan(plan))
 	{
 		/*
 		 * We can omit the SubqueryScan node and just pull up the subplan.
@@ -1716,9 +1723,6 @@ set_subqueryscan_references(PlannerInfo *root,
 		if (IsA(plan->subplan, ShareInputScan) &&
 			(cteplaninfo->attr_map != NULL))
 		{
-			Plan* lefttree = plan->subplan->lefttree;
-			is_producer = lefttree != NULL;
-
 			/*
 			 * Subquery [attno: 5]
 			 *	-> ShareInputScan arrno[1, 2, 3, 4, 5]
@@ -1752,7 +1756,7 @@ set_subqueryscan_references(PlannerInfo *root,
 			{
 				/* insert result node */
 				Plan	   *resultplan;
-    			resultplan = (Plan *) make_result(new_tlist, NULL, plan->subplan->lefttree);
+				resultplan = (Plan *) make_result(new_tlist, NULL, plan->subplan->lefttree);
 				resultplan->flow = plan->subplan->lefttree->flow;
 
 				plan->subplan->lefttree = resultplan;
