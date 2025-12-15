@@ -571,6 +571,8 @@
 		"ssl_renegotiation_limit",
 		"standard_conforming_strings",
 		"stats_temp_directory",
+		"streaming_damping_factor",
+		"streaming_damping_rows_threshold",
 		"superuser_reserved_connections",
 		"synchronous_commit",
 		"synchronous_standby_names",

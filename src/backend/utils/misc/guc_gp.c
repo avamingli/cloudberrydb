@@ -484,6 +484,9 @@ bool		gp_allow_date_field_width_5digits = false;
 /* Avoid do a real REFRESH materialized view if possibile. */
 bool		gp_enable_refresh_fast_path = true;
 
+double streaming_damping_factor;
+int streaming_damping_rows_threshold;
+
 static const struct config_enum_entry gp_log_format_options[] = {
 	{"text", 0},
 	{"csv", 1},
@@ -4719,6 +4722,17 @@ struct config_int ConfigureNamesInt_gp[] =
 		5, 1, MAX_BACKENDS,
 		check_max_running_tasks, NULL, NULL
 	},
+
+	{
+		{"streaming_damping_rows_threshold", PGC_USERSET, EXTERNAL_TABLES,
+			gettext_noop("Set the threshold of using streaming damping"),
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
+		},
+		&streaming_damping_rows_threshold,
+		1000, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
 	
 	/* End-of-list marker */
 	{
@@ -4855,6 +4869,17 @@ struct config_real ConfigureNamesReal_gp[] =
 		},
 		&optimizer_spilling_mem_threshold,
 		0.0, 0.0, DBL_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"streaming_damping_factor", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("streaming hash aggregate costs damping facor."),
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
+		},
+		&streaming_damping_factor,
+		0.95, 0.0, 1.0,
 		NULL, NULL, NULL
 	},
 
