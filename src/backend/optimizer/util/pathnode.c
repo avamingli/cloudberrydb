@@ -5092,13 +5092,13 @@ create_agg_path(PlannerInfo *root,
 
 	/* Correct the effect of streaming */
 	if (streaming &&
-		pathnode->path.rows >= streaming_damping_rows_threshold&&
+		pathnode->path.rows >= cbdb_streaming_damping_rows_threshold&&
 		(subpath->pathtype != T_SeqScan) &&
-		(pathnode->path.rows >= subpath->rows * streaming_damping_factor))
+		(pathnode->path.rows >= subpath->rows * cbdb_streaming_damping_factor))
 	{
-		pathnode->path.rows *= streaming_damping_factor;
-		pathnode->path.startup_cost *= streaming_damping_factor;
-		pathnode->path.total_cost *= streaming_damping_factor;
+		pathnode->path.rows *= cbdb_streaming_damping_factor;
+		pathnode->path.startup_cost *= cbdb_streaming_damping_factor;
+		pathnode->path.total_cost *= cbdb_streaming_damping_factor;
 	}
 
 	/* add tlist eval cost for each output row */

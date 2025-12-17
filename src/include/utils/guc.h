@@ -869,7 +869,8 @@ extern bool gpvars_check_rg_query_fixed_mem(int *newval, void **extra, GucSource
 extern int guc_name_compare(const char *namea, const char *nameb);
 extern void DispatchSyncPGVariable(struct config_generic * gconfig);
 
-extern double streaming_damping_factor;
-extern int streaming_damping_rows_threshold;
+extern double cbdb_streaming_damping_factor;
+extern int cbdb_streaming_damping_rows_threshold;
+extern double cbdb_inner_join_selectivity_damping_factor;
 
 #endif							/* GUC_H */

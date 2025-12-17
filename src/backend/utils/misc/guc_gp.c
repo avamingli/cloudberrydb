@@ -484,8 +484,10 @@ bool		gp_allow_date_field_width_5digits = false;
 /* Avoid do a real REFRESH materialized view if possibile. */
 bool		gp_enable_refresh_fast_path = true;
 
-double streaming_damping_factor;
-int streaming_damping_rows_threshold;
+double cbdb_streaming_damping_factor;
+int cbdb_streaming_damping_rows_threshold;
+
+double cbdb_inner_join_selectivity_damping_factor;
 
 static const struct config_enum_entry gp_log_format_options[] = {
 	{"text", 0},
@@ -4724,12 +4726,12 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
-		{"streaming_damping_rows_threshold", PGC_USERSET, EXTERNAL_TABLES,
+		{"cbdb_streaming_damping_rows_threshold", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Set the threshold of using streaming damping"),
 			NULL,
-			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
+			GUC_NOT_IN_SAMPLE
 		},
-		&streaming_damping_rows_threshold,
+		&cbdb_streaming_damping_rows_threshold,
 		1000, 0, INT_MAX,
 		NULL, NULL, NULL
 	},
@@ -4873,13 +4875,24 @@ struct config_real ConfigureNamesReal_gp[] =
 	},
 
 	{
-		{"streaming_damping_factor", PGC_USERSET, QUERY_TUNING_METHOD,
+		{"cbdb_streaming_damping_factor", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("streaming hash aggregate costs damping facor."),
 			NULL,
-			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
+			GUC_NOT_IN_SAMPLE
 		},
-		&streaming_damping_factor,
+		&cbdb_streaming_damping_factor,
 		0.95, 0.0, 1.0,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"cbdb_inner_join_selectivity_damping_factor", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Damping of selectivities in inner join clauses."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&cbdb_inner_join_selectivity_damping_factor,
+		1.4, 1.0, DBL_MAX,
 		NULL, NULL, NULL
 	},
 
