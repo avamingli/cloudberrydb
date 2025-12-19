@@ -1697,8 +1697,11 @@ set_subqueryscan_references(PlannerInfo *root,
 		is_producer = true;
 	}
 
-	/* Producer needs to insert Result node, so don't omit here. */
-	if (!is_producer && trivial_subqueryscan(plan))
+	/*
+	 * Producer needs to insert Result node, so don't omit here.
+	 * Consumer needs to adjust targetlist too.
+	 */
+	if (!IsA(plan->subplan, ShareInputScan) && trivial_subqueryscan(plan))
 	{
 		/*
 		 * We can omit the SubqueryScan node and just pull up the subplan.

@@ -3121,7 +3121,7 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		 * Having multiple SharedScans can lead to deadlocks. For now,
 		 * disallow sharing of ctes at lower levels.
 		 */
-		config->gp_cte_sharing = false;
+		//config->gp_cte_sharing = false;
 
 		config->honor_order_by = false;
 
