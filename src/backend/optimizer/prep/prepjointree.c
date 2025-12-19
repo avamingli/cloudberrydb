@@ -750,13 +750,33 @@ pull_up_sublinks_qual_recurse(PlannerInfo *root, Node *node,
 	{
 		OpExpr *opexp = (OpExpr *) node;
 		JoinExpr   *j;
+		Node *rarg;
+		Node *n_tmp = node; 
 
-		if (list_length(opexp->args) == 2)
+
+		bool sublink_found = false;
+		while (IsA(n_tmp, OpExpr))
+		{
+			OpExpr *op_tmp = (OpExpr *) n_tmp;
+
+			if (list_length(op_tmp->args) != 2)
+				break;
+
+			rarg = list_nth(op_tmp->args, 1);
+			if (IsA(rarg, SubLink))
+			{
+				sublink_found = true;
+				break;
+			}
+			n_tmp = list_nth(op_tmp->args, 1);
+		}
+
+		if (sublink_found && list_length(opexp->args) == 2)
 		{
 			/**
 			 * Check if second arg is sublink
 			 */
-			Node *rarg = list_nth(opexp->args, 1);
+			// Node *rarg = list_nth(opexp->args, 1);
 
 			if (IsA(rarg, SubLink))
 			{
