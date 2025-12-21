@@ -7501,7 +7501,7 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 				/* Now decide what to stick atop it */
 				if (parse->groupingSets)
 				{
-					/* do nothing, not support parallel now */
+					/* do nothing, could not support parallel directly */
 				}
 				else if (parse->hasAggs || parse->groupClause)
 				{
