@@ -71,6 +71,8 @@
 #include "utils/lsyscache.h"
 #include "utils/selfuncs.h"
 
+#include "optimizer/restrictinfo.h"
+
 typedef enum
 {
 	INVALID_DQA = -1,
@@ -2835,4 +2837,62 @@ static void add_first_stage_group_agg_partial_path(PlannerInfo *root,
 									 estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
 																	path->rows, path->locus)));
 	}
+}
+
+/*
+ * Do a pre window agg if upper tells us there were a window filter
+ * We don't need to motion data acoocrding to the locus as
+ * it will be processed later in final window agg. 
+ */
+Path *
+cdb_create_pre_window_agg_path(PlannerInfo *root,
+								bool is_sorted,
+								int presorted_keys,
+								RelOptInfo *rel,
+								Path *subpath,
+								PathTarget *target,
+								List *group_pathkeys,
+								PathTarget *window_target,
+								List *window_functions,
+								WindowClause *wc)
+{
+	bool	use_incremental_sort =  (presorted_keys != 0 && enable_incremental_sort);
+	
+	if(!is_sorted && group_pathkeys)
+	{
+		if (!use_incremental_sort)
+			subpath = (Path *) create_sort_path(root,
+												rel,
+												subpath,
+												group_pathkeys,
+												-1.0);
+		else
+		{
+			subpath = (Path *) create_incremental_sort_path(root,
+															rel,
+															subpath,
+															group_pathkeys,
+															presorted_keys,
+															-1.0);
+		}
+	}
+
+	subpath = (Path *)
+			create_windowagg_path(root, rel, subpath, window_target,
+									window_functions, wc);
+
+	
+	// TODO: find window filter
+	Node *window_filter = copyObject(root->upper_window_filter);
+	
+	RestrictInfo *restrict_info = make_simple_restrictinfo(root, (Expr*) window_filter);
+
+	// Remove unused pathtarget
+	subpath = (Path *) create_projection_path_with_quals(root,
+													  rel,
+													  subpath,
+													  window_target,
+													  list_make1(restrict_info),
+													  false);
+	return subpath;
 }

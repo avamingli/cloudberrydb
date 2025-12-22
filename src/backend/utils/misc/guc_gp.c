@@ -489,6 +489,8 @@ int cbdb_streaming_damping_rows_threshold;
 
 double cbdb_inner_join_selectivity_damping_factor;
 
+bool	cbdb_enable_multi_window_agg = true;
+
 static const struct config_enum_entry gp_log_format_options[] = {
 	{"text", 0},
 	{"csv", 1},
@@ -3388,6 +3390,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_enable_runtime_filter_pushdown,
 		false,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"cbdb_enable_multi_window_agg", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Enable multi phase aggregations for window functions."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&cbdb_enable_multi_window_agg,
+		true,
 		NULL, NULL, NULL
 	},
 

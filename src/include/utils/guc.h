@@ -872,5 +872,6 @@ extern void DispatchSyncPGVariable(struct config_generic * gconfig);
 extern double cbdb_streaming_damping_factor;
 extern int cbdb_streaming_damping_rows_threshold;
 extern double cbdb_inner_join_selectivity_damping_factor;
+extern bool	cbdb_enable_multi_window_agg;
 
 #endif							/* GUC_H */

@@ -185,6 +185,10 @@ static void subquery_push_qual_1(Query *subquery, Relids relids, Node *qual);
 static void
 remove_cte_unused_subquery_outputs(CtePlanInfo * cteplaninfo);
 
+static void
+set_subquery_window_filter (PlannerInfo *root, RelOptInfo *rel,
+				   RangeTblEntry *rte, Index rti, Query *subquery);
+
 /*
  * make_one_rel
  *	  Finds all possible access paths for executing a query, returning a
@@ -2548,6 +2552,10 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 		 */
 		subquery = push_down_restrict(root, rel, rte, rti, subquery);
 
+		/* set_subquery_window_filter */
+		if (cbdb_enable_multi_window_agg)
+			set_subquery_window_filter(root, rel, rte, rti, subquery);
+
 		/*
 		 * The upper query might not use all the subquery's output columns; if
 		 * not, we can simplify.
@@ -4244,6 +4252,97 @@ push_down_restrict(PlannerInfo *root, RelOptInfo *rel,
 	pfree(safetyInfo.unsafeColumns);
 
 	return subquery;
+}
+
+static void
+set_subquery_window_filter (PlannerInfo *root, RelOptInfo *rel,
+				   RangeTblEntry *rte, Index rti, Query *subquery)
+{
+	Node* window_filter = NULL;
+	WindowFunc* winfunc_candidate = NULL;
+	int winref = 0;
+	ListCell *lc = NULL;
+	TargetEntry *tle = NULL;
+	int *window_attr_refs;
+
+	if(!subquery->hasWindowFuncs ||
+		rel->baserestrictinfo == NIL)
+		return;
+
+	int size = list_length(subquery->targetList);
+	window_attr_refs = (int*) palloc0(size*sizeof(int));
+
+	foreach(lc, subquery->targetList)
+	{
+		tle = (TargetEntry *)lfirst(lc);
+		if (IsA(tle->expr, WindowFunc))
+		{
+			WindowFunc* winfunc = (WindowFunc*) (tle->expr);
+			if (winfunc->winfnoid == F_RANK_ ||
+				winfunc->winfnoid == F_DENSE_RANK_)
+				window_attr_refs[tle->resno - 1] = winfunc->winref;
+		}
+	}
+
+	foreach(lc, rel->baserestrictinfo)
+	{
+		RestrictInfo *rinfo = (RestrictInfo *) lfirst(lc);
+		Node	   *clause = (Node *) rinfo->clause;
+
+		if (rinfo->pseudoconstant)
+			continue;
+
+		if (!IsA(clause, OpExpr))
+			continue;
+
+		OpExpr *op = (OpExpr*) clause;
+		if (op->opno != 420 /* <= */ &&
+			op->opno != 418 /* < */)
+			continue;
+
+		if (list_length(op->args) != 2)
+			continue;
+
+		Node * leftop = (Node *) linitial(op->args);
+		Node * rightop = (Node *) lsecond(op->args);
+		if (!IsA(leftop, Var) ||
+			!IsA(rightop, Const))
+			continue;
+		
+		Var *var = (Var*) leftop;
+
+		if (var->varno != rti)
+			continue;
+
+		if (window_attr_refs[var->varattno - 1] == 0)
+			continue;
+
+		/* fail if there were already one. */
+		if (window_filter != NULL)
+		{
+			pfree(window_attr_refs);
+			return;
+		}
+	
+		/* Now we found a candidate. */
+		window_filter = clause;
+		winref = window_attr_refs[var->varattno - 1];
+		TargetEntry *tle = (TargetEntry *) list_nth(subquery->targetList, var->varattno -1);
+		Assert(IsA(tle->expr, WindowFunc));
+		winfunc_candidate = (WindowFunc*)copyObject(tle->expr);
+
+	}
+
+	if (window_filter)
+	{
+		root->lower_window_filter = copyObject(window_filter);
+		/* record window expr, as var will be replaced later. */
+		list_nth_replace(((OpExpr *) root->lower_window_filter)->args, 0, winfunc_candidate);
+		root->lower_window_filter_winref = winref;
+	}
+	pfree(window_attr_refs);
+
+	return;
 }
 
 static List *

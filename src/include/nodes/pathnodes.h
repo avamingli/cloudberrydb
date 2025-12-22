@@ -509,6 +509,10 @@ struct PlannerInfo
 
 	Query	   *aqumv_raw_parse;	/* Raw parse tree for AQUMV join exact-match */
 	bool 		is_shared_scan; /* true for shared scan */
+	Node		*lower_window_filter; /* simple window function on subquery. */
+	int 		lower_window_filter_winref; /* winref of subquery. */
+	Node		*upper_window_filter; /* simple window function from parent query.*/
+	int 		upper_window_filter_winref; /* winref of subquery. */
 };
 
 /*

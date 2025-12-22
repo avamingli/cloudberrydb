@@ -967,6 +967,10 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	root->non_recursive_path = NULL;
 	root->partColsUpdated = false;
 	root->is_correlated_subplan = false;
+	root->lower_window_filter = NULL;
+	root->lower_window_filter_winref = 0;
+	root->upper_window_filter = parent_root ? copyObject(parent_root->lower_window_filter) : NULL;
+	root->upper_window_filter_winref = parent_root ? parent_root->lower_window_filter_winref : 0;
 
 	/*
 	 * Save a copy of the raw parse tree for AQUMV join exact-match.
@@ -5021,29 +5025,6 @@ create_one_window_path(PlannerInfo *root,
 												path->pathkeys,
 												&presorted_keys);
 
-		/*
-		 * Unless the PARTITION BY in the window happens to match the
-		 * current distribution, we need a motion. Each partition
-		 * needs to be handled in the same segment.
-		 *
-		 * If there is no PARTITION BY, then all rows form a single
-		 * partition, so we need to gather all the tuples to a single
-		 * node. But we'll do that after the Sort, so that the Sort
-		 * is parallelized.
-		 *
-		 * This is the same logic that is used for sorted Aggregates.
-		 */
-
-		path = cdb_prepare_path_for_sorted_agg(root,
-											   is_sorted,
-											   presorted_keys,
-											   window_rel,
-											   path,
-											   path->pathtarget,
-											   window_pathkeys,
-											   -1.0,
-											   wc->partitionClause,
-											   NIL);
 		if (lnext(activeWindows, l))
 		{
 			/*
@@ -5070,6 +5051,44 @@ create_one_window_path(PlannerInfo *root,
 			/* Install the goal target in the topmost WindowAgg */
 			window_target = output_target;
 		}
+
+		if (cbdb_enable_multi_window_agg &&
+			root->upper_window_filter &&
+			root->upper_window_filter_winref == wc->winref)
+			path = cdb_create_pre_window_agg_path(root,
+												is_sorted,
+												presorted_keys,
+												window_rel,
+												path,
+												path->pathtarget,
+											   	window_pathkeys,
+												window_target,
+								  				wflists->windowFuncs[wc->winref],
+								  				wc);
+
+		/*
+		 * Unless the PARTITION BY in the window happens to match the
+		 * current distribution, we need a motion. Each partition
+		 * needs to be handled in the same segment.
+		 *
+		 * If there is no PARTITION BY, then all rows form a single
+		 * partition, so we need to gather all the tuples to a single
+		 * node. But we'll do that after the Sort, so that the Sort
+		 * is parallelized.
+		 *
+		 * This is the same logic that is used for sorted Aggregates.
+		 */
+
+		path = cdb_prepare_path_for_sorted_agg(root,
+											   is_sorted,
+											   presorted_keys,
+											   window_rel,
+											   path,
+											   path->pathtarget,
+											   window_pathkeys,
+											   -1.0,
+											   wc->partitionClause,
+											   NIL);
 
 		path = (Path *)
 			create_windowagg_path(root, window_rel, path, window_target,
@@ -9208,16 +9227,6 @@ create_partial_window_path(PlannerInfo *root,
 												path->pathkeys,
 												&presorted_keys);
 
-		path = cdb_prepare_path_for_sorted_agg(root,
-											   is_sorted,
-											   presorted_keys,
-											   window_rel,
-											   path,
-											   path->pathtarget,
-											   window_pathkeys,
-											   -1.0,
-											   wc->partitionClause,
-											   NIL);
 		if (lnext(activeWindows, l))
 		{
 			ListCell   *lc2;
@@ -9235,6 +9244,31 @@ create_partial_window_path(PlannerInfo *root,
 		{
 			window_target = output_target;
 		}
+
+		if (cbdb_enable_multi_window_agg &&
+			root->upper_window_filter &&
+			root->upper_window_filter_winref == wc->winref)
+			path = cdb_create_pre_window_agg_path(root,
+												is_sorted,
+												presorted_keys,
+												window_rel,
+												path,
+												path->pathtarget,
+											   	window_pathkeys,
+												window_target,
+								  				wflists->windowFuncs[wc->winref],
+								  				wc);
+
+		path = cdb_prepare_path_for_sorted_agg(root,
+											   is_sorted,
+											   presorted_keys,
+											   window_rel,
+											   path,
+											   path->pathtarget,
+											   window_pathkeys,
+											   -1.0,
+											   wc->partitionClause,
+											   NIL);
 
 		path = (Path *)
 			create_windowagg_path(root, window_rel, path, window_target,
