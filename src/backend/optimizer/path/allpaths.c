@@ -3159,6 +3159,38 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			subroot = subquery_planner(cteroot->glob, subquery, root,
 									   cte->cterecursive,
 									   tuple_fraction, config);
+
+			sub_final_rel = fetch_upper_rel(subroot, UPPERREL_FINAL, NULL);
+
+			if (!IS_DUMMY_REL(sub_final_rel))
+			{
+
+				if (sub_final_rel->partial_pathlist != NIL)
+				{
+					Path * partial_path = (Path*) linitial(sub_final_rel->partial_pathlist);
+
+					if (partial_path->parallel_workers <= 1)
+						add_path(sub_final_rel, partial_path, subroot);
+					else
+					{
+						if (!IsA(partial_path, Motion))
+						{
+							CdbPathLocus locus = cdbpathlocus_from_subquery(root, sub_final_rel, partial_path);
+							locus.parallel_workers = 0;
+
+							partial_path = cdbpath_create_motion_path(subroot,
+																		partial_path,
+																		partial_path->pathkeys,
+																		false,
+																		locus);
+
+							add_path(sub_final_rel, partial_path, subroot);
+						}
+					}
+				}
+
+				set_cheapest(sub_final_rel);
+			}
 		}
 		else
 		{
@@ -3305,6 +3337,33 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 				 * we cannot use different plans for different instances of this CTE
 				 * reference, so keep only the cheapest one.
 				 */
+
+				if (!IS_DUMMY_REL(sub_final_rel) && (sub_final_rel->partial_pathlist != NIL))
+				{
+					Path * partial_path = (Path*) linitial(sub_final_rel->partial_pathlist);
+
+					if (partial_path->parallel_workers <= 1)
+						add_path(sub_final_rel, partial_path, subroot);
+					else
+					{
+						if (!IsA(partial_path, Motion))
+						{
+							CdbPathLocus locus = cdbpathlocus_from_subquery(root, sub_final_rel, partial_path);
+							locus.parallel_workers = 0;
+
+							partial_path = cdbpath_create_motion_path(subroot,
+																		partial_path,
+																		partial_path->pathkeys,
+																		false,
+																		locus);
+
+							add_path(sub_final_rel, partial_path, subroot);
+						}
+					}
+				}
+
+				set_cheapest(sub_final_rel);
+
 				sub_final_rel->pathlist = list_make1(sub_final_rel->cheapest_total_path);
 
 				cteplaninfo->subroot = subroot;
