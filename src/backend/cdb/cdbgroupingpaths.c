@@ -751,6 +751,9 @@ create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
 				Path	   *path = (Path *) lfirst(lc);
 				bool		is_sorted;
 
+				if (cdbpathlocus_collocates_tlist(root, path->locus, ctx->group_tles))
+					continue;
+
 				/* Don't check loucs as parallel might be winner. */
 				is_sorted = pathkeys_contained_in(ctx->partial_needed_pathkeys,
 													path->pathkeys);
@@ -776,10 +779,33 @@ create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
 		if (!cdbpathlocus_collocates_tlist(root, cheapest_path->locus, ctx->group_tles))
 			add_first_stage_hash_agg_path(root, cheapest_path, ctx, false);
 
-		if (ctx->is_distinct && cheapest_partial_path)
+		if (ctx->is_distinct &&
+			cheapest_partial_path &&
+			!cdbpathlocus_collocates_tlist(root, cheapest_partial_path->locus, ctx->group_tles))
 			add_first_stage_hash_agg_path(root, cheapest_partial_path, ctx, true);
-		else if (ctx->groupingSets &&  input_rel_cheapest_partial_path)
+		else if (ctx->groupingSets &&
+				input_rel_cheapest_partial_path &&
+				(!cdbpathlocus_collocates_tlist(root, input_rel_cheapest_partial_path->locus, ctx->group_tles)))
 			add_first_stage_hash_agg_path(root, input_rel_cheapest_partial_path, ctx, true);
+	}
+
+	if (ctx->groupClause &&
+		!ctx->groupingSets &&
+		(list_length(ctx->agg_costs->distinctAggrefs) == 0) &&
+		cheapest_partial_path)
+	{
+		/*
+		 * For GroupBy, if there were partially aggregated paths, add it to first stage.
+		 * Erase output_rel's partial paths, eager cbdb multiphase.
+		 *
+		 * FIXME: Could it happpen that the loucs is already distributed by Group BY columns? 
+		 * Anyway, use orinal path if it was.
+		 */
+		if (!cdbpathlocus_collocates_tlist(root, cheapest_partial_path->locus, ctx->group_tles))
+		{
+			output_rel->partial_pathlist = NIL;
+			add_partial_path(ctx->partial_rel, cheapest_partial_path);
+		}
 	}
 
 	if (ctx->partial_rel->fdwroutine &&
@@ -1012,6 +1038,13 @@ add_first_stage_group_agg_path(PlannerInfo *root,
 {
 	DQAType     dqa_type;
 
+	double		dNumGroups;
+
+	dNumGroups = estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
+												path->rows, path->locus);
+	if (path->parallel_workers > 1)
+		dNumGroups /= path->parallel_workers;
+
 	/*
 	 * DISTINCT-qualified aggregates are accepted only in the special
 	 * case that the input happens to be collocated with the DISTINCT
@@ -1096,8 +1129,7 @@ add_first_stage_group_agg_path(PlannerInfo *root,
 									 ctx->groupClause,
 									 NIL,
 									 ctx->agg_partial_costs,
-									 estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
-																	path->rows, path->locus)),
+									 dNumGroups),
 				 root);
 	}
 	else
@@ -1122,6 +1154,7 @@ add_second_stage_group_agg_path(PlannerInfo *root,
 	CdbPathLocus singleQE_locus;
 	CdbPathLocus group_locus;
 	bool		need_redistribute;
+	double		dNumGroups;
 
 	/* The input should be distributed, otherwise no point in a two-stage Agg. */
 	Assert(CdbPathLocus_IsPartitioned(initial_agg_path->locus));
@@ -1131,6 +1164,12 @@ add_second_stage_group_agg_path(PlannerInfo *root,
 										ctx->final_group_tles,
 										&need_redistribute);
 	Assert(need_redistribute);
+
+	if (CdbPathLocus_IsPartitioned(group_locus))
+		dNumGroups = clamp_row_est(ctx->dNumGroupsTotal /
+								   CdbPathLocus_NumSegmentsPlusParallelWorkers(group_locus));
+	else
+		dNumGroups = ctx->dNumGroupsTotal;
 
 	/*
 	 * We consider two different loci for the final result:
@@ -1176,7 +1215,7 @@ add_second_stage_group_agg_path(PlannerInfo *root,
 										ctx->final_groupClause,
 										ctx->havingQual,
 										ctx->agg_final_costs,
-										ctx->dNumGroupsTotal);
+										dNumGroups);
 		path->pathkeys = strip_gsetid_from_pathkeys(ctx->gsetid_sortref, path->pathkeys);
 
 		if (!is_partial)
@@ -1239,6 +1278,8 @@ add_first_stage_hash_agg_path(PlannerInfo *root,
 	dNumGroups = estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
 												path->rows, path->locus);
 
+	if (path->parallel_workers > 1)
+		dNumGroups /= path->parallel_workers;
 
 	if (parse->groupingSets && ctx->new_rollups)
 	{
@@ -1305,10 +1346,9 @@ add_second_stage_hash_agg_path(PlannerInfo *root,
 	/*
 	 * Calculate the number of groups in the second stage, per segment.
 	 */
-	// consider parallel?
 	if (CdbPathLocus_IsPartitioned(group_locus))
 		dNumGroups = clamp_row_est(ctx->dNumGroupsTotal /
-								   CdbPathLocus_NumSegments(group_locus));
+								   CdbPathLocus_NumSegmentsPlusParallelWorkers(group_locus));
 	else
 		dNumGroups = ctx->dNumGroupsTotal;
 
@@ -2784,9 +2824,15 @@ static void add_first_stage_group_agg_partial_path(PlannerInfo *root,
 										   bool is_sorted,
 										   cdb_agg_planning_context *ctx)
 {
+	double		dNumGroups;
 
 	if (ctx->agg_costs->distinctAggrefs)
 		return;
+
+	dNumGroups = estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
+												path->rows, path->locus);
+	if (path->parallel_workers > 1)
+		dNumGroups /= path->parallel_workers;
 
 	if (!is_sorted)
 	{
@@ -2834,8 +2880,7 @@ static void add_first_stage_group_agg_partial_path(PlannerInfo *root,
 									 ctx->groupClause,
 									 NIL,
 									 ctx->agg_partial_costs,
-									 estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
-																	path->rows, path->locus)));
+									 dNumGroups));
 	}
 }
 
