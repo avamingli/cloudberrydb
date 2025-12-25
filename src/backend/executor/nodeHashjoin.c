@@ -1025,9 +1025,11 @@ ExecInitHashJoin(HashJoin *node, EState *estate, int eflags)
 		ExecInitRuntimeFilterFinish(rfstate, hstate->ps.plan->plan_rows);
 	}
 
+	bool parallel = ((HashState *) innerPlanState(hjstate))->parallel_state;
+
 	if (Gp_role == GP_ROLE_EXECUTE
 		&& gp_enable_runtime_filter_pushdown
-		&& !estate->useMppParallelMode)
+		&& !parallel)
 		CreateRuntimeFilter(hjstate);
 
 	return hjstate;
