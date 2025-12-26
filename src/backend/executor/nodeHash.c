@@ -346,6 +346,9 @@ MultiExecParallelHash(HashState *node)
 				if (TupIsNull(slot))
 					break;
 
+				if (gp_enable_runtime_filter_pushdown && node->filters)
+					AddTupleValuesIntoRF(node, slot);
+
 				econtext->ecxt_outertuple = slot;
 				if (ExecHashGetHashValue(node, hashtable, econtext, hashkeys,
 										 false, hashtable->keepNulls,
@@ -437,6 +440,9 @@ MultiExecParallelHash(HashState *node)
 	hashtable->log2_nbuckets = my_log2(hashtable->nbuckets);
 	hashtable->totalTuples = pstate->total_tuples;
 	ExecParallelHashEnsureBatchAccessors(hashtable);
+
+	if (gp_enable_runtime_filter_pushdown && node->filters)
+		PushdownRuntimeFilter(node);
 
 	/*
 	 * The next synchronization point is in ExecHashJoin's HJ_BUILD_HASHTABLE
