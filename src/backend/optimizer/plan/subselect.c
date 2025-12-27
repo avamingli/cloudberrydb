@@ -52,6 +52,8 @@
 #include "cdb/cdbutil.h"
 #include "cdb/cdbpath.h"
 
+#include "utils/guc.h"
+
 typedef struct convert_testexpr_context
 {
 	PlannerInfo *root;
@@ -568,7 +570,13 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 	SubPlan    *splan;
 	ListCell   *lc;
 	Bitmapset  *plan_param_set;
-	bool 		subplan_is_shared_scan = subroot->is_shared_scan;
+
+	bool eager_subplan = false;
+
+	if (subroot->is_shared_scan)
+		eager_subplan = true;
+	else if (cbdb_eager_subplan && !is_single_simple_query(subroot))
+		eager_subplan = true;
 
 	/*
 	 * Initialize the SubPlan node.  Note plan_id, plan_name, and cost fields
@@ -640,7 +648,7 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		splan->is_initplan = true;
 		result = (Node *) prm;
 	}
-	else if (splan->parParam == NIL && subLinkType == EXPR_SUBLINK && !subplan_is_shared_scan)
+	else if (splan->parParam == NIL && subLinkType == EXPR_SUBLINK && !eager_subplan)
 	{
 		TargetEntry *te = linitial(plan->targetlist);
 		Param	   *prm;
@@ -3635,3 +3643,41 @@ contain_ShareInputScan_walk(Node *node, contain_ShareInputScan_walk_context *ctx
 	return plan_tree_walker((Node *) node, contain_ShareInputScan_walk, ctx, true);
 }
 
+/*
+ * Used to judege if a query is simple enough to be an InitPlan.
+ * If not, convert it to SubPlan for more parallel.
+ * A simple select, on a simple relation(not CTE or Partitioned)
+ * No agg or Group By.
+ *
+ */
+bool
+is_single_simple_query(PlannerInfo *root)
+{
+	Query* parse = root->parse;
+
+	if (parse->hasAggs ||
+		parse->groupClause != NIL ||
+		parse->cteList != NIL ||
+		parse->hasSubLinks ||
+		parse->hasWindowFuncs)
+		return false;
+
+	if (list_length(parse->jointree->fromlist) != 1)
+		return false;
+
+	Node *jtnode = (Node *) linitial(parse->jointree->fromlist);
+	if (!IsA(jtnode, RangeTblRef))
+		return false;
+
+	int varno = ((RangeTblRef *) jtnode)->rtindex;
+	RangeTblEntry *rte = planner_rt_fetch(varno, root);
+	if ((rte->rtekind != RTE_RELATION))
+		return false;
+
+	char relkind = get_rel_relkind(rte->relid);
+	if (relkind != RELKIND_RELATION)
+		return false;
+
+	/* OK, it's simple enough. */
+	return true;
+}

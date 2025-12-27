@@ -484,12 +484,11 @@ bool		gp_allow_date_field_width_5digits = false;
 /* Avoid do a real REFRESH materialized view if possibile. */
 bool		gp_enable_refresh_fast_path = true;
 
-double cbdb_streaming_damping_factor;
-int cbdb_streaming_damping_rows_threshold;
-
-double cbdb_inner_join_selectivity_damping_factor;
-
+double	cbdb_streaming_damping_factor;
+int 	cbdb_streaming_damping_rows_threshold;
+double	cbdb_inner_join_selectivity_damping_factor;
 bool	cbdb_enable_multi_window_agg = true;
+bool	cbdb_eager_subplan = true;
 
 static const struct config_enum_entry gp_log_format_options[] = {
 	{"text", 0},
@@ -3400,6 +3399,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NOT_IN_SAMPLE
 		},
 		&cbdb_enable_multi_window_agg,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"cbdb_eager_subplan", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Eager SubPlan instead of InitPlan."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&cbdb_eager_subplan,
 		true,
 		NULL, NULL, NULL
 	},

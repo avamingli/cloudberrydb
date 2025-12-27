@@ -57,5 +57,6 @@ extern bool QueryHasDistributedRelation(Query *q, bool recursive);
 extern bool contain_outer_selfref(Node *node);
 extern bool testexpr_is_hashable(Node *testexpr, List *param_ids);
 
+extern bool is_single_simple_query(PlannerInfo *root);
 
 #endif							/* SUBSELECT_H */

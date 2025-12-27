@@ -873,5 +873,6 @@ extern double cbdb_streaming_damping_factor;
 extern int cbdb_streaming_damping_rows_threshold;
 extern double cbdb_inner_join_selectivity_damping_factor;
 extern bool	cbdb_enable_multi_window_agg;
+extern bool	cbdb_eager_subplan;
 
 #endif							/* GUC_H */
