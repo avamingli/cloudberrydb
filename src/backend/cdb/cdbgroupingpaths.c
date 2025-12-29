@@ -789,8 +789,8 @@ create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
 			add_first_stage_hash_agg_path(root, input_rel_cheapest_partial_path, ctx, true);
 	}
 
-	if (ctx->groupClause &&
-		!ctx->groupingSets &&
+	if (!ctx->groupingSets &&
+		(ctx->hasAggs || ctx->groupClause != NIL) &&
 		(list_length(ctx->agg_costs->distinctAggrefs) == 0) &&
 		cheapest_partial_path)
 	{
