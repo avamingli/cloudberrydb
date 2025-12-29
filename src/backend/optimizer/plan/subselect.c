@@ -438,8 +438,17 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 	{
 		Path	   *cheapest_partial_path;
 		cheapest_partial_path = linitial(final_rel->partial_pathlist);
-		add_path(final_rel, cheapest_partial_path, root);
-		set_cheapest(final_rel);
+		/*
+		 * Do not be parallel if there is only one row of a SeqScan.
+		 * Else, it will allocate many processes which are unnecessary inside
+		 * InitPlan nodes such as case: TPCDS query 114, 158.
+		 */
+		if (cheapest_partial_path->pathtype != T_SeqScan ||
+			cheapest_partial_path->rows > 1)
+		{
+			add_path(final_rel, cheapest_partial_path, root);
+			set_cheapest(final_rel);
+		}
 	}
 	best_path = get_cheapest_fractional_path(final_rel, tuple_fraction);
 
