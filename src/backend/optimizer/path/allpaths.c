@@ -3509,19 +3509,19 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	/* Also add partial paths for cte, for possibile paralle join and etc. */
 	if (sub_final_rel->partial_pathlist != NIL)
 	{
-		Path * subpath = (Path*) linitial(sub_final_rel->partial_pathlist);
 		List	   *pathkeys;
 		CdbPathLocus locus;
-
-		locus = cdbpathlocus_from_subquery(root, rel, subpath);
-
-		/* Convert subquery pathkeys to outer representation */
-		pathkeys = convert_subquery_pathkeys(root, rel, subpath->pathkeys,
-											 make_tlist_from_pathtarget(subpath->pathtarget));
+		Path * subpath;
 
 		/* Generate appropriate path */
 		if (!is_shared)
 		{
+			subpath = (Path*) linitial(sub_final_rel->partial_pathlist);
+			locus = cdbpathlocus_from_subquery(root, rel, subpath);
+
+			/* Convert subquery pathkeys to outer representation */
+			pathkeys = convert_subquery_pathkeys(root, rel, subpath->pathkeys,
+											 make_tlist_from_pathtarget(subpath->pathtarget));
 			add_partial_path(rel, create_ctescan_path(root,
 									  rel,
 									  subpath,
@@ -3536,7 +3536,11 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			 * We also do that in partial_pathlist for possible parallel.
 			 */
 			Assert(sub_final_rel->cheapest_total_path);
-			locus = cdbpathlocus_from_subquery(root, rel, (sub_final_rel->cheapest_total_path));
+			subpath = sub_final_rel->cheapest_total_path;
+			locus = cdbpathlocus_from_subquery(root, rel, subpath);
+			/* Convert subquery pathkeys to outer representation */
+			pathkeys = convert_subquery_pathkeys(root, rel, subpath->pathkeys,
+											 make_tlist_from_pathtarget(subpath->pathtarget));
 			add_partial_path(rel, create_ctescan_path(root,
 										  rel,
 										  NULL /* is_shared */,
