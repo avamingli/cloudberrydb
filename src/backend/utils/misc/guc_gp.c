@@ -489,6 +489,7 @@ int 	cbdb_streaming_damping_rows_threshold;
 double	cbdb_inner_join_selectivity_damping_factor;
 bool	cbdb_enable_multi_window_agg = true;
 bool	cbdb_eager_subplan = true;
+double	cbdb_dedup_semi_damping_factor;
 
 static const struct config_enum_entry gp_log_format_options[] = {
 	{"text", 0},
@@ -4916,6 +4917,17 @@ struct config_real ConfigureNamesReal_gp[] =
 		},
 		&cbdb_inner_join_selectivity_damping_factor,
 		1.4, 1.0, DBL_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"cbdb_dedup_semi_damping_factor", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Damping of dedup semi and dedup semi reverse join costs."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&cbdb_dedup_semi_damping_factor,
+		1.1, 1.0, DBL_MAX,
 		NULL, NULL, NULL
 	},
 

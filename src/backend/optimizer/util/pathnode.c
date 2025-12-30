@@ -4055,11 +4055,13 @@ create_nestloop_path(PlannerInfo *root,
 	if (orig_jointype == JOIN_DEDUP_SEMI ||
 		orig_jointype == JOIN_DEDUP_SEMI_REVERSE)
 	{
-		return (Path *) create_unique_rowid_path(root,
+		UniquePath *upath = create_unique_rowid_path(root,
 												 joinrel,
 												 (Path *) pathnode,
 												 pathnode->innerjoinpath->parent->relids,
 												 rowidexpr_id);
+		upath->path.total_cost *= cbdb_dedup_semi_damping_factor;
+		return (Path *) upath;
 	}
 
 	/*
@@ -4275,11 +4277,13 @@ create_mergejoin_path(PlannerInfo *root,
 	if (orig_jointype == JOIN_DEDUP_SEMI ||
 		orig_jointype == JOIN_DEDUP_SEMI_REVERSE)
 	{
-		return (Path *) create_unique_rowid_path(root,
+		UniquePath* upath =	create_unique_rowid_path(root,
 												 joinrel,
 												 (Path *) pathnode,
 												 pathnode->jpath.innerjoinpath->parent->relids,
 												 rowidexpr_id);
+		upath->path.total_cost *= cbdb_dedup_semi_damping_factor;
+		return (Path *) upath;
 	}
 
 	/*
@@ -4521,11 +4525,13 @@ create_hashjoin_path(PlannerInfo *root,
 	if (orig_jointype == JOIN_DEDUP_SEMI ||
 		orig_jointype == JOIN_DEDUP_SEMI_REVERSE)
 	{
-		return (Path *) create_unique_rowid_path(root,
+		UniquePath *upath = create_unique_rowid_path(root,
 												 joinrel,
 												 (Path *) pathnode,
 												 pathnode->jpath.innerjoinpath->parent->relids,
 												 rowidexpr_id);
+		upath->path.total_cost *= cbdb_dedup_semi_damping_factor;
+		return (Path *) upath;
 	}
 
 	/*
