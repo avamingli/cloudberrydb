@@ -2344,8 +2344,11 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 	bool		add_motion = false;
 	double		numsegments;
 
+	/* CBDB_PARALLEL: we might try different paths to be unique. */
+#if 0
 	/* Caller made a mistake if subpath isn't cheapest_total ... */
 	Assert(subpath == rel->cheapest_total_path);
+#endif
 	Assert(subpath->parent == rel);
 	/* ... or if SpecialJoinInfo is the wrong one */
 	Assert(sjinfo->jointype == JOIN_SEMI);

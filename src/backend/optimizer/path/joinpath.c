@@ -2334,19 +2334,39 @@ hash_inner_and_outer(PlannerInfo *root,
 			 * JOIN_UNIQUE_INNER because we can't guarantee uniqueness.
 			 */
 			if (innerrel->partial_pathlist != NIL &&
-				save_jointype != JOIN_UNIQUE_INNER &&
+				/* save_jointype != JOIN_UNIQUE_INNER && */
 				enable_parallel_hash)
 			{
 				cheapest_partial_inner =
 					(Path *) linitial(innerrel->partial_pathlist);
-				try_partial_hashjoin_path(root, joinrel,
-										  cheapest_partial_outer,
-										  cheapest_partial_inner,
-										  hashclauses,
-										  jointype,
-										  save_jointype,
-										  extra,
-										  true /* parallel_hash */ );
+
+				if (save_jointype != JOIN_UNIQUE_INNER)
+				{
+					try_partial_hashjoin_path(root, joinrel,
+											  cheapest_partial_outer,
+											  cheapest_partial_inner,
+											  hashclauses,
+											  jointype,
+											  save_jointype,
+											  extra,
+											  true /* parallel_hash */ );
+				}
+				else
+				{
+					cheapest_partial_inner= (Path *) create_unique_path(root, innerrel, 
+															cheapest_partial_inner, extra->sjinfo);
+					if (cheapest_partial_inner)
+					{
+						try_partial_hashjoin_path(root, joinrel,
+												  cheapest_partial_outer,
+												  cheapest_partial_inner,
+												  hashclauses,
+												  JOIN_INNER, /* convert to inner join. */
+												  save_jointype,
+												  extra,
+												  true /* parallel_hash */ );
+					}
+				}
 			}
 
 			/*
