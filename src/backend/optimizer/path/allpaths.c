@@ -1011,6 +1011,7 @@ set_rel_consider_parallel(PlannerInfo *root, RelOptInfo *rel,
 
 		case RTE_CTE:
 
+#if 0
 			/*
 			 * CTE tuplestores aren't shared among parallel workers, so we
 			 * force all CTE scans to happen in the leader.  Also, populating
@@ -1019,7 +1020,16 @@ set_rel_consider_parallel(PlannerInfo *root, RelOptInfo *rel,
 			 * executed only once.
 			 */
 			return;
-
+#endif
+			/*
+			 * CBDB_PARALLEL:
+			 * For shared CTE, we gater partial path to single worker:
+			 * producer. Unlinke UPSTREAM, CBDB might add path(parallel_worker=0) with
+			 * subpaths(parallel_workers > 1) into pathlist with help of Motion.
+			 * So that we could be parallel.
+			 * For no-shared CTE, there is no such problem.
+			 */
+			break;
 		case RTE_VOID:
 
 			/*
@@ -3161,36 +3171,6 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 									   tuple_fraction, config);
 
 			sub_final_rel = fetch_upper_rel(subroot, UPPERREL_FINAL, NULL);
-
-			if (!IS_DUMMY_REL(sub_final_rel))
-			{
-
-				if (sub_final_rel->partial_pathlist != NIL)
-				{
-					Path * partial_path = (Path*) linitial(sub_final_rel->partial_pathlist);
-
-					if (partial_path->parallel_workers <= 1)
-						add_path(sub_final_rel, partial_path, subroot);
-					else
-					{
-						if (!IsA(partial_path, Motion))
-						{
-							CdbPathLocus locus = cdbpathlocus_from_subquery(root, sub_final_rel, partial_path);
-							locus.parallel_workers = 0;
-
-							partial_path = cdbpath_create_motion_path(subroot,
-																		partial_path,
-																		partial_path->pathkeys,
-																		false,
-																		locus);
-
-							add_path(sub_final_rel, partial_path, subroot);
-						}
-					}
-				}
-
-				set_cheapest(sub_final_rel);
-			}
 		}
 		else
 		{
@@ -3240,12 +3220,6 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			/* Select best Path and turn it into a Plan */
 			sub_final_rel = fetch_upper_rel(subroot, UPPERREL_FINAL, NULL);
 
-			/*
-			 * we cannot use different plans for different instances of this CTE
-			 * reference, so keep only the cheapest
-			 */
-			sub_final_rel->pathlist = list_make1(sub_final_rel->cheapest_total_path);
-
 			cteplaninfo->subroot = subroot;
 			cteplaninfo->push_quals_possible = true;
 			if (sub_final_rel->cheapest_total_path->rows >= 10 * cte->cterefcount * sub_final_rel->cheapest_total_path->total_cost)
@@ -3257,6 +3231,42 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 				is_shared = false;
 			}
 			subroot->is_shared_scan = is_shared;
+
+			if (is_shared)
+			{
+				if (!IS_DUMMY_REL(sub_final_rel) && (sub_final_rel->partial_pathlist != NIL))
+				{
+					Path * partial_path = (Path*) linitial(sub_final_rel->partial_pathlist);
+
+					if (partial_path->parallel_workers <= 1)
+						add_path(sub_final_rel, partial_path, subroot);
+					else
+					{
+						if (!IsA(partial_path, Motion))
+						{
+							CdbPathLocus locus = cdbpathlocus_from_subquery(root, sub_final_rel, partial_path);
+							locus.parallel_workers = 0;
+
+							partial_path = cdbpath_create_motion_path(subroot,
+																		partial_path,
+																		partial_path->pathkeys,
+																		false,
+																		locus);
+
+							add_path(sub_final_rel, partial_path, subroot);
+						}
+					}
+				}
+			}
+
+			set_cheapest(sub_final_rel);
+
+			/*
+			 * we cannot use different plans for different instances of this CTE
+			 * reference, so keep only the cheapest
+			 */
+			sub_final_rel->pathlist = list_make1(sub_final_rel->cheapest_total_path);
+
 		}
 		else
 			subroot = cteplaninfo->subroot;
@@ -3416,6 +3426,17 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 													  pathkeys,
 													  required_outer),
 							root);
+
+					/*
+					 * For shared scan, we must gather parallel to write tuples in producer. 
+					 * We also do that in partial_pathlist for possible parallel.
+					 */
+					add_partial_path(rel, create_ctescan_path(root,
+												  rel,
+												  NULL /* is_shared */,
+												  locus,
+												  pathkeys,
+												  required_outer));
 				}
 				return;
 			}
@@ -3483,6 +3504,46 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 										  pathkeys,
 										  required_outer),
 				 root);
+	}
+
+	/* Also add partial paths for cte, for possibile paralle join and etc. */
+	if (sub_final_rel->partial_pathlist != NIL)
+	{
+		Path * subpath = (Path*) linitial(sub_final_rel->partial_pathlist);
+		List	   *pathkeys;
+		CdbPathLocus locus;
+
+		locus = cdbpathlocus_from_subquery(root, rel, subpath);
+
+		/* Convert subquery pathkeys to outer representation */
+		pathkeys = convert_subquery_pathkeys(root, rel, subpath->pathkeys,
+											 make_tlist_from_pathtarget(subpath->pathtarget));
+
+		/* Generate appropriate path */
+		if (!is_shared)
+		{
+			add_partial_path(rel, create_ctescan_path(root,
+									  rel,
+									  subpath,
+									  locus,
+									  pathkeys,
+									  required_outer));
+		}
+		else
+		{
+			/*
+			 * For shared scan, we must gather parallel to write tuples in producer. 
+			 * We also do that in partial_pathlist for possible parallel.
+			 */
+			Assert(sub_final_rel->cheapest_total_path);
+			locus = cdbpathlocus_from_subquery(root, rel, (sub_final_rel->cheapest_total_path));
+			add_partial_path(rel, create_ctescan_path(root,
+										  rel,
+										  NULL /* is_shared */,
+										  locus,
+										  pathkeys,
+										  required_outer));
+		}
 	}
 }
 

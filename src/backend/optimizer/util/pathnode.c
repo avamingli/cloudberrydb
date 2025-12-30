@@ -3405,9 +3405,13 @@ create_ctescan_path(PlannerInfo *root, RelOptInfo *rel,
 													 required_outer);
 	pathnode->parallel_aware = false;
 	pathnode->parallel_safe = rel->consider_parallel;
+#if 0
 	pathnode->parallel_workers = 0;
+#endif
 	pathnode->pathkeys = pathkeys;
 	pathnode->locus = locus;
+	/* CBDB_PARALLEL: use locus.parallel */
+	pathnode->parallel_workers = locus.parallel_workers;
 
 	pathnode->sameslice_relids = NULL;
 
