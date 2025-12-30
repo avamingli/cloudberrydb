@@ -3099,6 +3099,7 @@ cdbpath_motion_for_parallel_join(PlannerInfo *root,
 	{
 		case JOIN_INNER:
 		case JOIN_UNIQUE_INNER:
+		case JOIN_UNIQUE_OUTER:
 			break;
 		case JOIN_SEMI:
 			if (!enable_parallel_semi_join)
@@ -3109,7 +3110,6 @@ cdbpath_motion_for_parallel_join(PlannerInfo *root,
 		case JOIN_LASJ_NOTIN:
 			outer.ok_to_replicate = false;
 			break;
-		case JOIN_UNIQUE_OUTER:
 		case JOIN_RIGHT:
 		case JOIN_FULL:
 			outer.ok_to_replicate = false;
