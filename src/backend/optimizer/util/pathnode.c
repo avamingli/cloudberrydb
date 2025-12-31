@@ -4060,7 +4060,8 @@ create_nestloop_path(PlannerInfo *root,
 												 (Path *) pathnode,
 												 pathnode->innerjoinpath->parent->relids,
 												 rowidexpr_id);
-		upath->path.total_cost *= cbdb_dedup_semi_damping_factor;
+		if (upath)
+			upath->path.total_cost *= cbdb_dedup_semi_damping_factor;
 		return (Path *) upath;
 	}
 
@@ -4282,7 +4283,8 @@ create_mergejoin_path(PlannerInfo *root,
 												 (Path *) pathnode,
 												 pathnode->jpath.innerjoinpath->parent->relids,
 												 rowidexpr_id);
-		upath->path.total_cost *= cbdb_dedup_semi_damping_factor;
+		if (upath)
+			upath->path.total_cost *= cbdb_dedup_semi_damping_factor;
 		return (Path *) upath;
 	}
 
@@ -4530,7 +4532,8 @@ create_hashjoin_path(PlannerInfo *root,
 												 (Path *) pathnode,
 												 pathnode->jpath.innerjoinpath->parent->relids,
 												 rowidexpr_id);
-		upath->path.total_cost *= cbdb_dedup_semi_damping_factor;
+		if (upath)
+			upath->path.total_cost *= cbdb_dedup_semi_damping_factor;
 		return (Path *) upath;
 	}
 
