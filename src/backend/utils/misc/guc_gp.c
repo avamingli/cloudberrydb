@@ -4927,7 +4927,7 @@ struct config_real ConfigureNamesReal_gp[] =
 			GUC_NOT_IN_SAMPLE
 		},
 		&cbdb_dedup_semi_damping_factor,
-		1.1, 1.0, DBL_MAX,
+		1.04, 1.0, DBL_MAX,
 		NULL, NULL, NULL
 	},
 
