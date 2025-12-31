@@ -3431,12 +3431,13 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 					 * For shared scan, we must gather parallel to write tuples in producer. 
 					 * We also do that in partial_pathlist for possible parallel.
 					 */
-					add_partial_path(rel, create_ctescan_path(root,
-												  rel,
-												  NULL /* is_shared */,
-												  locus,
-												  pathkeys,
-												  required_outer));
+					if (rel->consider_parallel)
+						add_partial_path(rel, create_ctescan_path(root,
+													  rel,
+													  NULL /* is_shared */,
+													  locus,
+													  pathkeys,
+													  required_outer));
 				}
 				return;
 			}
@@ -3529,7 +3530,7 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 									  pathkeys,
 									  required_outer));
 		}
-		else
+		else if (rel->consider_parallel)
 		{
 			/*
 			 * For shared scan, we must gather parallel to write tuples in producer. 
