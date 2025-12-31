@@ -1888,7 +1888,10 @@ hash_agg_set_limits(AggState *aggstate, double hashentrysize, double input_group
 	 * of the buffers needed for all the tapes that need to be open at once.
 	 * Then, subtract that from the memory available for holding hash tables.
 	 */
-	npartitions = hash_choose_num_partitions(aggstate,
+	if (aggstate && aggstate->streaming)
+		npartitions = 0;
+	else
+		npartitions = hash_choose_num_partitions(aggstate,
 											 input_groups,
 											 hashentrysize,
 											 used_bits,
