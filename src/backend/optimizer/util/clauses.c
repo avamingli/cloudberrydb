@@ -833,8 +833,7 @@ max_parallel_hazard_walker(Node *node, max_parallel_hazard_context *context)
 	 */
 	else if (IsA(node, SubLink))
 	{
-		/* CBDB: see comments in window agg. */
-		if (max_parallel_hazard_test(PROPARALLEL_SAFE, context))
+		if (max_parallel_hazard_test(PROPARALLEL_RESTRICTED, context))
 			return true;
 	}
 
