@@ -247,6 +247,14 @@ typedef enum
 #define GUC_GPDB_NEED_SYNC     0x00400000  /* guc value is synced between master and primary */
 #define GUC_GPDB_NO_SYNC       0x00800000  /* guc value is not synced between master and primary */
 
+/*
+ * FIXEM: we have bad logic in get_explain_guc_options
+ * Even GUCs have no GUC_EXPLAIN flag, explain(verbose) still show them.
+ * It's a bug. However, there would be much more plan diffs if we fix it now.
+ * So introduce a temp fix flag to workaround for new added GUCs which are not showed in explain.
+ */
+#define GUC_NO_EXPLAIN       0x01000000  /* guc value is not synced between master and primary */
+
 /* GUC lists for gp_guc_list_show().  (List of struct config_generic) */
 extern List    *gp_guc_list_for_explain;
 extern List    *gp_guc_list_for_no_plan;

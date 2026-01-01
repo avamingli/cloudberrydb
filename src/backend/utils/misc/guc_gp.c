@@ -3399,7 +3399,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 		{"cbdb_enable_multi_window_agg", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Enable multi phase aggregations for window functions."),
 			NULL,
-			GUC_NOT_IN_SAMPLE
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
 		},
 		&cbdb_enable_multi_window_agg,
 		true,
@@ -3410,7 +3410,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 		{"cbdb_eager_subplan", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Eager SubPlan instead of InitPlan."),
 			NULL,
-			GUC_NOT_IN_SAMPLE
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
 		},
 		&cbdb_eager_subplan,
 		true,
@@ -3421,7 +3421,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 		{"cbdb_enable_setop_pre_dedup", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Enable do pre-deduplicate on subqueries of SetOp when there is no ALL."),
 			NULL,
-			GUC_NOT_IN_SAMPLE
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
 		},
 		&cbdb_enable_setop_pre_dedup,
 		true,
@@ -3432,7 +3432,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 		{"cbdb_enable_dynamic_shared_scan", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Choose Shared Scan dynamically according to costs even CTE has multiple references."),
 			NULL,
-			GUC_NOT_IN_SAMPLE
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
 		},
 		&cbdb_enable_dynamic_shared_scan,
 		true,
@@ -4777,7 +4777,7 @@ struct config_int ConfigureNamesInt_gp[] =
 		{"cbdb_streaming_damping_rows_threshold", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Set the threshold of using streaming damping"),
 			NULL,
-			GUC_NOT_IN_SAMPLE
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
 		},
 		&cbdb_streaming_damping_rows_threshold,
 		1000, 0, INT_MAX,
@@ -4926,7 +4926,7 @@ struct config_real ConfigureNamesReal_gp[] =
 		{"cbdb_streaming_damping_factor", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("streaming hash aggregate costs damping facor."),
 			NULL,
-			GUC_NOT_IN_SAMPLE
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
 		},
 		&cbdb_streaming_damping_factor,
 		0.95, 0.0, 1.0,
@@ -4937,7 +4937,7 @@ struct config_real ConfigureNamesReal_gp[] =
 		{"cbdb_inner_join_selectivity_damping_factor", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Damping of selectivities in inner join clauses."),
 			NULL,
-			GUC_NOT_IN_SAMPLE
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
 		},
 		&cbdb_inner_join_selectivity_damping_factor,
 		1.4, 1.0, DBL_MAX,
@@ -4948,7 +4948,7 @@ struct config_real ConfigureNamesReal_gp[] =
 		{"cbdb_dedup_semi_damping_factor", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Damping of dedup semi and dedup semi reverse join costs."),
 			NULL,
-			GUC_NOT_IN_SAMPLE
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
 		},
 		&cbdb_dedup_semi_damping_factor,
 		1.04, 1.0, DBL_MAX,
