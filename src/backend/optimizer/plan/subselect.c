@@ -3680,7 +3680,17 @@ is_single_simple_query(PlannerInfo *root)
 
 	int varno = ((RangeTblRef *) jtnode)->rtindex;
 	RangeTblEntry *rte = planner_rt_fetch(varno, root);
-	if ((rte->rtekind != RTE_RELATION))
+
+	/*
+	 * Don't disturb Result or Values.
+	 * select * from listp where a = (select 1);
+	 */
+	if (rte->rtekind == RTE_RESULT ||
+		rte->rtekind == RTE_VALUES ||
+		rte->rtekind == RTE_FUNCTION)
+		return true;
+
+	if (rte->rtekind != RTE_RELATION )
 		return false;
 
 	char relkind = get_rel_relkind(rte->relid);
