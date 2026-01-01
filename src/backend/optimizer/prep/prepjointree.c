@@ -3945,8 +3945,10 @@ make_setop_distinct(Query *subquery)
 static void
 make_setop_distinct_recurse(Node *setOp, Query *setOpQuery, bool distinct)
 {
-	if (IsA(setOp, RangeTblRef) && distinct)
+	if (IsA(setOp, RangeTblRef))
 	{
+		if (!distinct)
+			return;
 		RangeTblRef *rtr = (RangeTblRef *) setOp;
 		RangeTblEntry *rte = rt_fetch(rtr->rtindex, setOpQuery->rtable);
 		Query	   *subquery = rte->subquery;
