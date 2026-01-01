@@ -3120,8 +3120,17 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			break;
 		default:
 			/* if plan sharing is enabled and contains volatile functions in the CTE query, also generate a shared scan plan */
-			is_shared =  root->config->gp_cte_sharing && (cte->cterefcount > 1 || contain_volatile_function);
-
+			/*
+			 * we must use shared scan if there is volatile function, even gp_cte_sharing is false.
+			 * SELECT count(*) FROM (
+			 *  WITH q1(x) AS (SELECT random() FROM generate_series(1, 5))
+			 *	SELECT * FROM q1
+			 *  UNION
+			 *	SELECT * FROM q1
+			 * ) ss;
+			 *
+			 */
+			is_shared =  contain_volatile_function ? true : (root->config->gp_cte_sharing && (cte->cterefcount > 1));
 	}
 
 	/*
@@ -3130,6 +3139,17 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	 */
 	if (is_shared && contain_outer_selfref(cte->ctequery))
 		is_shared = false;
+
+	if (cte->cterecursive ||
+		cteroot->hasRecursion ||
+		root->hasRecursion ||
+		root->glob->under_recursive_cte ||
+		(cteroot->parent_root && cteroot->parent_root->glob->under_recursive_cte))
+	{
+		cteroot->glob->under_recursive_cte = true;
+		is_shared = false;
+	}
+
 
 	if (!is_shared)
 	{
@@ -3222,7 +3242,8 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 
 			cteplaninfo->subroot = subroot;
 			cteplaninfo->push_quals_possible = true;
-			if (sub_final_rel->cheapest_total_path->rows >= 10 * cte->cterefcount * sub_final_rel->cheapest_total_path->total_cost)
+			if (!contain_volatile_function &&
+				(sub_final_rel->cheapest_total_path->rows >= 10 * cte->cterefcount * sub_final_rel->cheapest_total_path->total_cost))
 			{
 				root->config->gp_cte_sharing = false;
 				cteplaninfo->push_quals_possible = false;

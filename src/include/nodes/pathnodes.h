@@ -211,6 +211,8 @@ typedef struct PlannerGlobal
 	int			numSlices;
 	struct PlanSlice *slices;
 
+	bool	under_recursive_cte;
+
 } PlannerGlobal;
 
 /* macro for fetching the Plan associated with a SubPlan node */
