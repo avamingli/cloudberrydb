@@ -491,6 +491,7 @@ bool	cbdb_enable_multi_window_agg = true;
 bool	cbdb_eager_subplan = true;
 double	cbdb_dedup_semi_damping_factor;
 bool	cbdb_enable_setop_pre_dedup;
+bool	cbdb_enable_dynamic_shared_scan;
 
 static const struct config_enum_entry gp_log_format_options[] = {
 	{"text", 0},
@@ -3423,6 +3424,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NOT_IN_SAMPLE
 		},
 		&cbdb_enable_setop_pre_dedup,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"cbdb_enable_dynamic_shared_scan", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Choose Shared Scan dynamically according to costs even CTE has multiple references."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&cbdb_enable_dynamic_shared_scan,
 		true,
 		NULL, NULL, NULL
 	},

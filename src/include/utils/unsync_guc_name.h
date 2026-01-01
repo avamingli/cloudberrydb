@@ -38,6 +38,7 @@
 		"bonjour_name",
 		"cbdb_dedup_semi_damping_factor",
 		"cbdb_eager_subplan",
+		"cbdb_enable_dynamic_shared_scan",
 		"cbdb_enable_multi_window_agg",
 		"cbdb_enable_setop_pre_dedup",
 		"cbdb_inner_join_selectivity_damping_factor",

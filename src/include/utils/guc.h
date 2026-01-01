@@ -876,5 +876,6 @@ extern bool	cbdb_enable_multi_window_agg;
 extern bool	cbdb_eager_subplan;
 extern double	cbdb_dedup_semi_damping_factor;
 extern bool	cbdb_enable_setop_pre_dedup;
+extern bool	cbdb_enable_dynamic_shared_scan;
 
 #endif							/* GUC_H */

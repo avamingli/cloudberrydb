@@ -3244,6 +3244,7 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			cteplaninfo->push_quals_possible = true;
 			if (!contain_volatile_function &&
 				(cte->ctematerialized != CTEMaterializeDefault) && /* Don't change if user has the decision. */
+				cbdb_enable_dynamic_shared_scan &&
 				(sub_final_rel->cheapest_total_path->rows >= 10 * cte->cterefcount * sub_final_rel->cheapest_total_path->total_cost))
 			{
 				root->config->gp_cte_sharing = false;
