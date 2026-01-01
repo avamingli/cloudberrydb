@@ -3658,11 +3658,16 @@ contain_ShareInputScan_walk(Node *node, contain_ShareInputScan_walk_context *ctx
  * A simple select, on a simple relation(not CTE or Partitioned)
  * No agg or Group By.
  *
+ * For UPDATE/DELETE/INSERT, we return true to make them no changed.
  */
 bool
 is_single_simple_query(PlannerInfo *root)
 {
 	Query* parse = root->parse;
+
+	/* Don't touch writable operations. */
+	if (parse->commandType != CMD_SELECT)
+		return  true;
 
 	if (parse->hasAggs ||
 		parse->groupClause != NIL ||
