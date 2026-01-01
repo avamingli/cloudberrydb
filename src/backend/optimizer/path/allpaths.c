@@ -3404,8 +3404,28 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 						set_dummy_rel_pathlist(root, cte_rel);
 						continue;
 					}
-					/* Mark rel with estimated output rows, width, etc */
-					set_cte_size_estimates(root, cte_rel, sub_total_rows);
+
+					/* TODO: Mark rel with estimated output rows, width?  */
+					RangeTblEntry *rte = planner_rt_fetch(cte_rel->relid, root);
+					if (rte->rtekind == RTE_CTE)
+						set_cte_size_estimates(root, cte_rel, sub_total_rows);
+					else if (rte->rtekind == RTE_SUBQUERY)
+					{
+						/*
+						 * WITH t(a,b,d) AS (
+						 * 	SELECT foo.a,foo.b,bar.d FROM foo,bar WHERE foo.a = bar.d)
+						 * SELECT cup.*, SUM(t.d) FROM (
+						 *   SELECT bar.*, count(*) OVER() AS e FROM t,bar WHERE t.a = bar.c
+						 * ) AS cup, t
+						 * GROUP BY cup.c,cup.d, cup.e,t.a
+						 * HAVING AVG(t.d) < 10 ORDER BY 1,2,3,4 LIMIT 10;
+						 */
+						set_subquery_size_estimates(root, cte_rel);
+					}
+					else
+					{
+						Assert(false);
+					}
 
 					locus = cdbpathlocus_from_subquery(root, cte_rel, best_path);
 
