@@ -48,6 +48,8 @@
 #include "parser/parse_clause.h"
 #include "parser/parse_oper.h"
 
+#include "utils/guc.h"
+
 typedef struct pullup_replace_vars_context
 {
 	PlannerInfo *root;
@@ -962,7 +964,8 @@ pull_up_subqueries_recurse(PlannerInfo *root, Node *jtnode,
 			is_simple_union_all(rte->subquery))
 			return pull_up_simple_union_all(root, jtnode, rte);
 
-		if (rte->rtekind == RTE_SUBQUERY)
+		if (rte->rtekind == RTE_SUBQUERY &&
+			cbdb_enable_setop_pre_dedup)
 			make_setop_distinct(rte->subquery);
 
 		/*

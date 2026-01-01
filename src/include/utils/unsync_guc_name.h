@@ -39,6 +39,7 @@
 		"cbdb_dedup_semi_damping_factor",
 		"cbdb_eager_subplan",
 		"cbdb_enable_multi_window_agg",
+		"cbdb_enable_setop_pre_dedup",
 		"cbdb_inner_join_selectivity_damping_factor",
 		"cbdb_streaming_damping_factor",
 		"cbdb_streaming_damping_rows_threshold",
