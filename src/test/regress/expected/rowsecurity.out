@@ -2277,9 +2277,10 @@ EXPLAIN (COSTS OFF) EXECUTE plancache_test2;
          ->  Broadcast Motion 3:3  (slice2; segments: 3)
                ->  Seq Scan on z2
          ->  Materialize
-               ->  Shared Scan (share slice:id 1:0)
-                     ->  Seq Scan on z1
-                           Filter: (((a % 2) = 0) AND f_leak(b))
+               ->  Subquery Scan on q
+                     ->  Shared Scan (share slice:id 1:0)
+                           ->  Seq Scan on z1
+                                 Filter: (((a % 2) = 0) AND f_leak(b))
  Optimizer: Postgres query optimizer
 (9 rows)
 
@@ -2293,8 +2294,9 @@ EXPLAIN (COSTS OFF) EXECUTE plancache_test3;
                ->  Seq Scan on z1
                      Filter: (((a % 2) = 0) AND f_leak(b))
          ->  Materialize
-               ->  Shared Scan (share slice:id 1:0)
-                     ->  Seq Scan on z2
+               ->  Subquery Scan on q
+                     ->  Shared Scan (share slice:id 1:0)
+                           ->  Seq Scan on z2
  Optimizer: Postgres query optimizer
 (9 rows)
 
@@ -2334,11 +2336,12 @@ EXPLAIN (COSTS OFF) EXECUTE plancache_test2;
          ->  Broadcast Motion 3:3  (slice2; segments: 3)
                ->  Seq Scan on z2
          ->  Materialize
-               ->  Shared Scan (share slice:id 1:0)
-                     ->  Seq Scan on z1
-                           Filter: (((a % 2) = 0) AND f_leak(b))
+               ->  Subquery Scan on q
+                     ->  Shared Scan (share slice:id 1:0)
+                           ->  Seq Scan on z1
+                                 Filter: (((a % 2) = 0) AND f_leak(b))
  Optimizer: Postgres query optimizer
-(9 rows)
+(10 rows)
 
 EXPLAIN (COSTS OFF) EXECUTE plancache_test3;
                         QUERY PLAN                         
@@ -2349,10 +2352,11 @@ EXPLAIN (COSTS OFF) EXECUTE plancache_test3;
                ->  Seq Scan on z1
                      Filter: (((a % 2) = 0) AND f_leak(b))
          ->  Materialize
-               ->  Shared Scan (share slice:id 1:0)
-                     ->  Seq Scan on z2
+               ->  Subquery Scan on q
+                     ->  Shared Scan (share slice:id 1:0)
+                           ->  Seq Scan on z2
  Optimizer: Postgres query optimizer
-(9 rows)
+(10 rows)
 
 SET SESSION AUTHORIZATION regress_rls_carol;
 SELECT * FROM z1 WHERE f_leak(b);
@@ -2390,11 +2394,12 @@ EXPLAIN (COSTS OFF) EXECUTE plancache_test2;
          ->  Broadcast Motion 3:3  (slice2; segments: 3)
                ->  Seq Scan on z2
          ->  Materialize
-               ->  Shared Scan (share slice:id 1:0)
-                     ->  Seq Scan on z1
-                           Filter: (((a % 2) = 1) AND f_leak(b))
+               ->  Subquery Scan on q
+                     ->  Shared Scan (share slice:id 1:0)
+                           ->  Seq Scan on z1
+                                 Filter: (((a % 2) = 1) AND f_leak(b))
  Optimizer: Postgres query optimizer
-(9 rows)
+(10 rows)
 
 EXPLAIN (COSTS OFF) EXECUTE plancache_test3;
                         QUERY PLAN                         
@@ -2405,10 +2410,11 @@ EXPLAIN (COSTS OFF) EXECUTE plancache_test3;
                ->  Seq Scan on z1
                      Filter: (((a % 2) = 1) AND f_leak(b))
          ->  Materialize
-               ->  Shared Scan (share slice:id 1:0)
-                     ->  Seq Scan on z2
+               ->  Subquery Scan on q
+                     ->  Shared Scan (share slice:id 1:0)
+                           ->  Seq Scan on z2
  Optimizer: Postgres query optimizer
-(9 rows)
+(10 rows)
 
 SET ROLE regress_rls_group2;
 SELECT * FROM z1 WHERE f_leak(b);
@@ -2446,11 +2452,12 @@ EXPLAIN (COSTS OFF) EXECUTE plancache_test2;
          ->  Broadcast Motion 3:3  (slice2; segments: 3)
                ->  Seq Scan on z2
          ->  Materialize
-               ->  Shared Scan (share slice:id 1:0)
-                     ->  Seq Scan on z1
-                           Filter: (((a % 2) = 1) AND f_leak(b))
+               ->  Subquery Scan on q
+                     ->  Shared Scan (share slice:id 1:0)
+                           ->  Seq Scan on z1
+                                 Filter: (((a % 2) = 1) AND f_leak(b))
  Optimizer: Postgres query optimizer
-(9 rows)
+(10 rows)
 
 EXPLAIN (COSTS OFF) EXECUTE plancache_test3;
                         QUERY PLAN                         
@@ -2461,10 +2468,11 @@ EXPLAIN (COSTS OFF) EXECUTE plancache_test3;
                ->  Seq Scan on z1
                      Filter: (((a % 2) = 1) AND f_leak(b))
          ->  Materialize
-               ->  Shared Scan (share slice:id 1:0)
-                     ->  Seq Scan on z2
+               ->  Subquery Scan on q
+                     ->  Shared Scan (share slice:id 1:0)
+                           ->  Seq Scan on z2
  Optimizer: Postgres query optimizer
-(9 rows)
+(10 rows)
 
 --
 -- Views should follow policy for view owner.
@@ -3007,11 +3015,12 @@ WITH cte1 AS MATERIALIZED (SELECT * FROM t1 WHERE f_leak(b)) SELECT * FROM cte1;
                      QUERY PLAN                      
 -----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Shared Scan (share slice:id 1:0)
-         ->  Seq Scan on t1
-               Filter: (((a % 2) = 0) AND f_leak(b))
+   ->  Subquery Scan on cte1
+         ->  Shared Scan (share slice:id 1:0)
+               ->  Seq Scan on t1
+                     Filter: (((a % 2) = 0) AND f_leak(b))
  Optimizer: Postgres query optimizer
-(5 rows)
+(6 rows)
 
 WITH cte1 AS (UPDATE t1 SET a = a + 1 RETURNING *) SELECT * FROM cte1; --fail
 ERROR:  new row violates row-level security policy for table "t1"
