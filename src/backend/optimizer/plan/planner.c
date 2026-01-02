@@ -8411,7 +8411,7 @@ create_partial_grouping_paths(PlannerInfo *root,
 									 partially_grouped_rel->reltarget,
 									 AGG_HASHED,
 									 AGGSPLIT_INITIAL_SERIAL,
-									 true, /* streaming */
+									 gp_use_streaming_hashagg, /* streaming */
 									 parse->groupClause,
 									 NIL,
 									 agg_partial_costs,
@@ -8444,7 +8444,7 @@ create_partial_grouping_paths(PlannerInfo *root,
 											 partially_grouped_rel->reltarget,
 											 AGG_HASHED,
 											 AGGSPLIT_INITIAL_SERIAL,
-											 true, /* streaming */
+											 gp_use_streaming_hashagg, /* streaming */
 											 parse->groupClause,
 											 NIL,
 											 agg_partial_costs,
