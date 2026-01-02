@@ -219,14 +219,15 @@ get_cte_plan_info(PlannerInfo *root, Index scanrelid);
 
 typedef struct CteAttrMapContext
 {
-	const AttrNumber *newattno; /* The mapping table to remap the varattno */
+	Relids	relids;
+	AttrNumber *newattno; /* The mapping table to remap the varattno */
 } CteAttrMapContext;
 
 static bool
 change_varattnos_of_ShareInputScan_walker(Node *node, const CteAttrMapContext *attrMapCxt);
 
 static void
-change_varattnos_of_ShareInputScan(Node *node, const AttrNumber *newattno);
+change_varattnos_of_ShareInputScan(Node *node, CtePlanInfo *cteplaninfo);
 
 #ifdef USE_ASSERT_CHECKING
 #include "cdb/cdbplan.h"
@@ -1648,9 +1649,9 @@ change_varattnos_of_ShareInputScan_walker(Node *node, const CteAttrMapContext *a
 		Var		   *var = (Var *) node;
 
 		if (var->varlevelsup == 0 &&
-			var->varattno > 0)
+			var->varattno > 0 &&
+			bms_is_member(var->varno, attrMapCxt->relids))
 		{
-			Assert(attrMapCxt->newattno[var->varattno - 1] > 0);
 			var->varattno = var->varattnosyn = attrMapCxt->newattno[var->varattno - 1];
 		}
 		return false;
@@ -1660,11 +1661,12 @@ change_varattnos_of_ShareInputScan_walker(Node *node, const CteAttrMapContext *a
 }
 
 static void
-change_varattnos_of_ShareInputScan(Node *node, const AttrNumber *newattno)
+change_varattnos_of_ShareInputScan(Node *node, CtePlanInfo *cteplaninfo)
 {
 	CteAttrMapContext attrMapCxt;
 
-	attrMapCxt.newattno = newattno;
+	attrMapCxt.newattno = cteplaninfo->attr_map->attnums;
+	attrMapCxt.relids = cteplaninfo->relids;
 
 	(void) change_varattnos_of_ShareInputScan_walker(node, &attrMapCxt);
 }
@@ -1775,18 +1777,39 @@ set_subqueryscan_references(PlannerInfo *root,
 				var->varattno = tle->resno;
 			}
 
-			/*
-			 * resno, attno: (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)
-			 * used attno: 2, 4
-			 * resno, attno: (1, null), (2, 1), (3, null), (4, 2), (5, null)
-			 *
-			 * SELECT * from gp_toolkit.gp_partitions where schemaname = 'public'
-			 * and tablename = 'partrl' and partitionlevel = 1 order by partitionrank;
-			 */
-			change_varattnos_of_ShareInputScan((Node *) plan->scan.plan.targetlist, cteplaninfo->attr_map->attnums);
-			change_varattnos_of_ShareInputScan((Node *) plan->scan.plan.qual, cteplaninfo->attr_map->attnums);
-		}
+			//foreach (lc, plan->scan.plan.targetlist)
+			//{
+			//	TargetEntry *tle = (TargetEntry *)lfirst(lc);
+			//	Var *var = (Var *)tle->expr;
 
+			//	/* Don't touch other refs. */
+			//	if (!bms_is_member(var->varno, cteplaninfo->relids))
+			//		continue;
+
+			//	if (cteplaninfo->attr_map->attnums[var->varattno - 1])
+			//	{
+			//		var->varattno = cteplaninfo->attr_map->attnums[var->varattno - 1];
+			//	}
+			//	else
+			//	{
+			//		 // make nulls
+			//		tle->expr = (Expr *)makeNullConst(exprType((Node *)var),
+			//										   exprTypmod((Node *)var),
+			//										   exprCollation((Node *)var));
+			//	}
+
+			//	/*
+			//	 * resno, attno: (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)
+			//	 * used attno: 2, 4
+			//	 * resno, attno: (1, null), (2, 1), (3, null), (4, 2), (5, null)
+			//	 *
+			//	 * SELECT * from gp_toolkit.gp_partitions where schemaname = 'public'
+			//	 * and tablename = 'partrl' and partitionlevel = 1 order by partitionrank;
+			//	 */
+			//}
+			change_varattnos_of_ShareInputScan((Node *)plan->scan.plan.targetlist, cteplaninfo);
+			change_varattnos_of_ShareInputScan((Node *)plan->scan.plan.qual, cteplaninfo);
+		}
 		plan->scan.plan.targetlist =
 			fix_scan_list(root, plan->scan.plan.targetlist,
 						  rtoffset, NUM_EXEC_TLIST((Plan *) plan));
@@ -1818,7 +1841,6 @@ set_subqueryscan_references(PlannerInfo *root,
 				i++;
 			}
 			rte->eref->colnames = list_concat(new_colnames1, new_colnames2);
-			//rte->eref->colnames = new_colnames1;
 		}
 
 		if (cteplaninfo && cteplaninfo->attr_map != NULL)
@@ -1847,14 +1869,6 @@ set_subqueryscan_references(PlannerInfo *root,
 				plan->subplan->plan_width = plan->scan.plan.plan_width;
 			}
 		}
-
-		//ListCell *lc1, *lc2;
-		//forboth(lc1, plan->scan.plan.targetlist, lc2, plan->subplan->targetlist)
-		//{
-		//	TargetEntry * tle1 = (TargetEntry*) lfirst(lc1);
-		//	TargetEntry * tle2 = (TargetEntry*) lfirst(lc2);
-		//	tle1->resname = tle2->resname;
-		//}
 
 		result = (Plan *) plan;
 	}
