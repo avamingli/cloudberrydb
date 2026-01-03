@@ -1652,6 +1652,7 @@ change_varattnos_of_ShareInputScan_walker(Node *node, const CteAttrMapContext *a
 			var->varattno > 0 &&
 			bms_is_member(var->varno, attrMapCxt->relids))
 		{
+			Assert(attrMapCxt->newattno[var->varattno - 1]);
 			var->varattno = var->varattnosyn = attrMapCxt->newattno[var->varattno - 1];
 		}
 		return false;
@@ -1777,36 +1778,36 @@ set_subqueryscan_references(PlannerInfo *root,
 				var->varattno = tle->resno;
 			}
 
-			//foreach (lc, plan->scan.plan.targetlist)
-			//{
-			//	TargetEntry *tle = (TargetEntry *)lfirst(lc);
-			//	Var *var = (Var *)tle->expr;
+			foreach (lc, plan->scan.plan.targetlist)
+			{
+				TargetEntry *tle = (TargetEntry *)lfirst(lc);
+				Var *var = (Var *)tle->expr;
 
-			//	/* Don't touch other refs. */
-			//	if (!bms_is_member(var->varno, cteplaninfo->relids))
-			//		continue;
+				/* Don't touch other refs. */
+				if (!bms_is_member(var->varno, cteplaninfo->relids))
+					continue;
 
-			//	if (cteplaninfo->attr_map->attnums[var->varattno - 1])
-			//	{
-			//		var->varattno = cteplaninfo->attr_map->attnums[var->varattno - 1];
-			//	}
-			//	else
-			//	{
-			//		 // make nulls
-			//		tle->expr = (Expr *)makeNullConst(exprType((Node *)var),
-			//										   exprTypmod((Node *)var),
-			//										   exprCollation((Node *)var));
-			//	}
+				/*
+				 * We must eliminate tlist that are no used by makeing nulls like UPSTREAM.
+				 * But don't correct varattno here as the var could be inside expression
+				 * recursivily, do it in change_varattnos_of_ShareInputScan().
+				 */
+				if (cteplaninfo->attr_map->attnums[var->varattno - 1] == 0)
+				{
+					tle->expr = (Expr *)makeNullConst(exprType((Node *)var),
+													   exprTypmod((Node *)var),
+													   exprCollation((Node *)var));
+				}
 
-			//	/*
-			//	 * resno, attno: (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)
-			//	 * used attno: 2, 4
-			//	 * resno, attno: (1, null), (2, 1), (3, null), (4, 2), (5, null)
-			//	 *
-			//	 * SELECT * from gp_toolkit.gp_partitions where schemaname = 'public'
-			//	 * and tablename = 'partrl' and partitionlevel = 1 order by partitionrank;
-			//	 */
-			//}
+				/*
+				 * resno, attno: (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)
+				 * used attno: 2, 4
+				 * resno, attno: (1, null), (2, 1), (3, null), (4, 2), (5, null)
+				 *
+				 * SELECT * from gp_toolkit.gp_partitions where schemaname = 'public'
+				 * and tablename = 'partrl' and partitionlevel = 1 order by partitionrank;
+				 */
+			}
 			change_varattnos_of_ShareInputScan((Node *)plan->scan.plan.targetlist, cteplaninfo);
 			change_varattnos_of_ShareInputScan((Node *)plan->scan.plan.qual, cteplaninfo);
 		}
