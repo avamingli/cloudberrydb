@@ -3417,6 +3417,15 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 
 				}
 
+				/*  Mark rel with estimated output rows, width for producer only. */
+				set_cte_size_estimates(root, rel, sub_total_rows);
+
+				locus = cdbpathlocus_from_subquery(root, rel, best_path);
+
+				/* Convert subquery pathkeys to outer representation */
+				pathkeys = convert_subquery_pathkeys(root, rel, best_path->pathkeys,
+														 make_tlist_from_pathtarget(best_path->pathtarget));
+
 				foreach (lc, cteplaninfo->rels)
 				{
 					RelOptInfo *cte_rel = (RelOptInfo*) lfirst(lc);
@@ -3427,34 +3436,6 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 						set_dummy_rel_pathlist(root, cte_rel);
 						continue;
 					}
-
-					/* TODO: Mark rel with estimated output rows, width?  */
-					RangeTblEntry *rte = planner_rt_fetch(cte_rel->relid, root);
-					if (rte->rtekind == RTE_CTE)
-						set_cte_size_estimates(root, cte_rel, sub_total_rows);
-					else if (rte->rtekind == RTE_SUBQUERY)
-					{
-						/*
-						 * WITH t(a,b,d) AS (
-						 * 	SELECT foo.a,foo.b,bar.d FROM foo,bar WHERE foo.a = bar.d)
-						 * SELECT cup.*, SUM(t.d) FROM (
-						 *   SELECT bar.*, count(*) OVER() AS e FROM t,bar WHERE t.a = bar.c
-						 * ) AS cup, t
-						 * GROUP BY cup.c,cup.d, cup.e,t.a
-						 * HAVING AVG(t.d) < 10 ORDER BY 1,2,3,4 LIMIT 10;
-						 */
-						set_subquery_size_estimates(root, cte_rel);
-					}
-					else
-					{
-						Assert(false);
-					}
-
-					locus = cdbpathlocus_from_subquery(root, cte_rel, best_path);
-
-					/* Convert subquery pathkeys to outer representation */
-					pathkeys = convert_subquery_pathkeys(root, cte_rel, best_path->pathkeys,
-														 make_tlist_from_pathtarget(best_path->pathtarget));
 
 					cte_rel->subroot = subroot;
 
