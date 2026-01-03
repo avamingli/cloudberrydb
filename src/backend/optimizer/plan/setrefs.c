@@ -1826,7 +1826,36 @@ set_subqueryscan_references(PlannerInfo *root,
 			CtePlanInfo *cteplaninfo = get_cte_plan_info(root, plan->scan.scanrelid);
 			RangeTblEntry *rte = rt_fetch(plan->scan.scanrelid, root->glob->finalrtable);
 
-			Assert(cteplaninfo->attr_map->maplen == list_length(rte->eref->colnames));
+			/*
+			 * It's possible that attr_map has more elements than colnames when subquery
+			 * has junk lists which are useless for upper query.
+			 *
+			 * qp_with_clause:
+			 * 
+			 * denseregions as
+			 * (
+			 * select FOO.*,count(distinct language) as "lang_count",
+			 * 	   sum(surfacearea) as "REGION_SURFACE_AREA"
+			 * from(
+			 * 	 select
+			 * 	   sum(population) as "REGION_POP",
+			 * 	   sum(gnp) as "REGION_GNP",
+			 * 	   region
+			 * 	 from
+			 * 	  country
+			 * 	 group by region
+			 * 	) FOO,countrylanguage,country
+			 * where
+			 *    country.code = countrylanguage.countrycode
+			 *    and FOO.region = country.region
+			 *    and FOO."REGION_POP" != 0
+			 * group by
+			 * FOO.region,foo."REGION_POP",foo."REGION_GNP"
+			 * order by sum(surfacearea)/foo."REGION_POP" desc)
+			 * 
+			 * the order by clause is not used by upper quqery.
+			 */
+			Assert(cteplaninfo->attr_map->maplen >= list_length(rte->eref->colnames));
 
 			ListCell *lc;
 			List *new_colnames1 = NIL;
