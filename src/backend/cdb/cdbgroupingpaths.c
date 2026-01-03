@@ -2902,6 +2902,7 @@ cdb_create_pre_window_agg_path(PlannerInfo *root,
 								WindowClause *wc)
 {
 	bool	use_incremental_sort =  (presorted_keys != 0 && enable_incremental_sort);
+	PathTarget *orig_pathtarget;
 	
 	if(!is_sorted && group_pathkeys)
 	{
@@ -2922,21 +2923,38 @@ cdb_create_pre_window_agg_path(PlannerInfo *root,
 		}
 	}
 
+	/*
+	 * Save origin pathtarget before we create pre window filter.
+	 * We need to keep Result node's pathtarget same as if there
+	 * is no window filter.
+	 *
+	 * ->  Result
+	 *	 Output: tenk1.ten, tenk1.four                                                                                                       Filter: ((rank() OVER (?)) < 3)
+	 *	 ->  WindowAgg
+	 *		   Output: rank() OVER (?), tenk1.ten, tenk1.four
+	 *		   Partition By: tenk1.four
+	 *		   Order By: tenk1.ten
+	 *		   ->  Sort
+	 *				 Output: tenk1.ten, tenk1.four
+	 *				 Sort Key: tenk1.four, tenk1.ten
+	 *				 ->  Index Scan using tenk1_unique2 on public.tenk1
+	 *					   Output: tenk1.ten, tenk1.four
+	 *					   Index Cond: (tenk1.unique2 < 10)
+	 */
+	orig_pathtarget = copy_pathtarget(subpath->pathtarget);
+
 	subpath = (Path *)
 			create_windowagg_path(root, rel, subpath, window_target,
 									window_functions, wc);
 
-	
-	// TODO: find window filter
 	Node *window_filter = copyObject(root->upper_window_filter);
 	
 	RestrictInfo *restrict_info = make_simple_restrictinfo(root, (Expr*) window_filter);
 
-	// Remove unused pathtarget
 	subpath = (Path *) create_projection_path_with_quals(root,
 													  rel,
 													  subpath,
-													  window_target,
+													  orig_pathtarget,
 													  list_make1(restrict_info),
 													  false);
 	return subpath;
