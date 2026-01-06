@@ -87,6 +87,8 @@
 #include "storage/lmgr.h"
 #include "utils/guc.h"
 
+#include "cdb/cdbmutate.h"
+
 #ifdef USE_ORCA
 extern void InitGPOPT();
 #endif
@@ -737,9 +739,11 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 	{
 		Plan	   *subplan = (Plan *) lfirst(lp);
 		PlannerInfo	   *subroot = (PlannerInfo *) lfirst(lr);
+		apply_shareinput_dag_to_tree_from_subplan = true;
 
 		lfirst(lp) = apply_shareinput_dag_to_tree(subroot, subplan);
 	}
+	apply_shareinput_dag_to_tree_from_subplan = false;
 	top_plan = apply_shareinput_dag_to_tree(root, top_plan);
 
 	/* final cleanup of the plan */

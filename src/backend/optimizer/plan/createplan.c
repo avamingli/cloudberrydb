@@ -4780,7 +4780,7 @@ create_ctescan_plan(PlannerInfo *root, Path *best_path,
 			cteplaninfo->shared_plan = prepare_plan_for_sharing(cteroot, subplan);
 		}
 		/* Wrap the common Plan tree in a ShareInputScan node */
-		subplan = share_prepared_plan(cteroot, cteplaninfo->shared_plan);
+		subplan = share_prepared_plan(cteroot, cteplaninfo->shared_plan, rte->ctename);
 	}
 
 	scan_plan = (Plan *) make_subqueryscan(tlist,

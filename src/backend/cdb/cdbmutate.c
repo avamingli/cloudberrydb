@@ -47,6 +47,8 @@
 
 #include "executor/executor.h"
 
+bool apply_shareinput_dag_to_tree_from_subplan = false;
+
 typedef struct
 {
 	plan_tree_base_prefix base; /* Required prefix for
@@ -640,7 +642,7 @@ create_shareinput_producer_rte(ApplyShareInputContext *ctxt, int share_id,
  * Memorize the shared plan of a shared input in an array, one per share_id.
  */
 static void
-shareinput_save_producer(ShareInputScan *plan, ApplyShareInputContext *ctxt)
+shareinput_save_producer(ShareInputScan *plan, ApplyShareInputContext *ctxt, bool from_subplan)
 {
 	int			share_id = plan->share_id;
 	int			new_shared_input_count = (share_id + 1);
@@ -651,11 +653,24 @@ shareinput_save_producer(ShareInputScan *plan, ApplyShareInputContext *ctxt)
 	{
 		ctxt->shared_plans = palloc0(sizeof(Plan *) * new_shared_input_count);
 		ctxt->shared_input_count = new_shared_input_count;
+		ctxt->ctenames = palloc0(sizeof(char *) * new_shared_input_count);
+		ctxt->producer_from_subplan = palloc0(sizeof(bool) * new_shared_input_count);
+		ctxt->producer_parent_plans = palloc0(sizeof(ShareInputScan*) * new_shared_input_count);
 	}
 	else if (ctxt->shared_input_count < new_shared_input_count)
 	{
 		ctxt->shared_plans = repalloc(ctxt->shared_plans, new_shared_input_count * sizeof(Plan *));
 		memset(&ctxt->shared_plans[ctxt->shared_input_count], 0, (new_shared_input_count - ctxt->shared_input_count) * sizeof(Plan *));
+
+		ctxt->ctenames = repalloc(ctxt->ctenames, sizeof(char *) * new_shared_input_count);
+		memset(&ctxt->ctenames[ctxt->shared_input_count], 0, (new_shared_input_count - ctxt->shared_input_count) * sizeof(char *));
+
+		ctxt->producer_from_subplan = repalloc(ctxt->producer_from_subplan , sizeof(bool) * new_shared_input_count);
+		memset(&ctxt->producer_from_subplan[ctxt->shared_input_count], 0, (new_shared_input_count - ctxt->shared_input_count) * sizeof(bool));
+
+		ctxt->producer_parent_plans = repalloc(ctxt->producer_parent_plans , new_shared_input_count * sizeof(ShareInputScan*));
+		memset(&ctxt->producer_parent_plans[ctxt->shared_input_count], 0, (new_shared_input_count - ctxt->shared_input_count) * sizeof(ShareInputScan*));
+
 		ctxt->shared_input_count = new_shared_input_count;
 	}
 
@@ -663,6 +678,9 @@ shareinput_save_producer(ShareInputScan *plan, ApplyShareInputContext *ctxt)
 
 	Assert(ctxt->shared_plans[share_id] == NULL);
 	ctxt->shared_plans[share_id] = plan->scan.plan.lefttree;
+	ctxt->ctenames[share_id] = plan->ctename;
+	ctxt->producer_from_subplan[share_id] = from_subplan;
+	ctxt->producer_parent_plans[share_id] = plan;
 }
 
 /*
@@ -700,8 +718,44 @@ shareinput_mutator_dag_to_tree(Node *node, PlannerInfo *root, bool fPop)
 		/* Is there a producer for this sub-tree already? */
 		for (share_id = 0; share_id < ctxt->shared_input_count; share_id++)
 		{
-			if (ctxt->shared_plans[share_id] == subplan)
+			if (ctxt->shared_plans[share_id] == subplan ||
+				strcmp(ctxt->ctenames[share_id], siscan->ctename) == 0)
 			{
+				if (ctxt->producer_from_subplan[share_id] && !apply_shareinput_dag_to_tree_from_subplan)
+				{
+					/*
+					 * If producer is from a subplan, do a second check if we could make it
+					 * to main plan.
+					 */
+					ShareInputScan *pre_producer = ctxt->producer_parent_plans[share_id];	
+					pre_producer->scan.plan.lefttree = NULL;
+
+					/* replace new producer. */
+					siscan->share_id = share_id;
+					ctxt->shared_plans[share_id] = siscan->scan.plan.lefttree;
+					ctxt->producer_from_subplan[share_id] = false;
+					ctxt->producer_parent_plans[share_id] = siscan;
+
+					attno = 1;
+					foreach(lc, subplan->targetlist)
+					{
+						TargetEntry *tle = (TargetEntry *) lfirst(lc);
+
+						if (tle->resname == NULL)
+						{
+							char		default_name[100];
+							char	   *resname;
+
+							snprintf(default_name, sizeof(default_name), "col_%d", attno);
+
+							resname = strVal(get_tle_name(tle, ctxt->curr_rtable, default_name));
+							tle->resname = pstrdup(resname);
+						}
+						attno++;
+					}
+					return true;
+				}
+
 				/*
 				 * Yes. This is a consumer. Remove the subtree, and assign the
 				 * same share_id as the producer.
@@ -714,12 +768,12 @@ shareinput_mutator_dag_to_tree(Node *node, PlannerInfo *root, bool fPop)
 
 		/*
 		 * Couldn't find a match in existing list of producers, so this is a
-		 * producer. Add this to the list of producers, and assign a new
+		 * producer. Add this to the list of producers, ad assign a new
 		 * share_id.
 		 */
 		siscan->share_id = share_id;
 
-		shareinput_save_producer(siscan, ctxt);
+		shareinput_save_producer(siscan, ctxt, apply_shareinput_dag_to_tree_from_subplan);
 
 		/*
 		 * Also make sure that all the entries in the subplan's target list
@@ -783,7 +837,7 @@ collect_shareinput_producers_walker(Node *node, PlannerInfo *root, bool fPop)
 		Assert(siscan->share_id >= 0);
 
 		if (subplan)
-			shareinput_save_producer(siscan, ctxt);
+			shareinput_save_producer(siscan, ctxt, false);
 	}
 	return true;
 }

@@ -138,6 +138,9 @@ typedef struct ApplyShareInputContext
 	ApplyShareInputContextPerShare *shared_inputs; /* one for each share */
 	Bitmapset  *qdShares;		/* share_ids that are referenced from QD slices */
 
+	char	  **ctenames;
+	bool	  *producer_from_subplan;
+	ShareInputScan **producer_parent_plans;
 } ApplyShareInputContext;
 
 /*----------
