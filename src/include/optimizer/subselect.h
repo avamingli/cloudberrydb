@@ -59,4 +59,13 @@ extern bool testexpr_is_hashable(Node *testexpr, List *param_ids);
 
 extern bool is_single_simple_query(PlannerInfo *root);
 
+extern bool contain_ShareInputScan(PlannerInfo *root, Node *node);
+
+#define		SISC_NONE		(0)
+#define		SISC_PRODUCER	(1<<0)
+#define		SISC_CONSUMER	(1<<1)
+
+extern int contain_ShareInputScan_detail(PlannerInfo *root, Node *node);
+
+
 #endif							/* SUBSELECT_H */

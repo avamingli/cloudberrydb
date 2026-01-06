@@ -3430,6 +3430,7 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 				{
 					RelOptInfo *cte_rel = (RelOptInfo*) lfirst(lc);
 					Relids required_outer = cte_rel->lateral_relids;
+					Path *cte_path = NULL;
 
 					if (IS_DUMMY_REL(sub_final_rel))
 					{
@@ -3441,27 +3442,37 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 
 					/* truncate preivous path */
 					cte_rel->pathlist = NIL;
-
-					/* Generate appropriate path */
-					add_path(cte_rel, create_ctescan_path(root,
+					cte_path =  create_ctescan_path(root,
 													  cte_rel,
 													  NULL /* is_shared */,
 													  locus,
 													  pathkeys,
-													  required_outer),
-							root);
+													  required_outer);
+
+					/* Correct the hazrads here using best_path_ */
+					cte_path->barrierHazard = best_path->barrierHazard;
+					cte_path->motionHazard = best_path->motionHazard;
+
+					/* Generate appropriate path */
+					add_path(cte_rel, cte_path, root);
 
 					/*
 					 * For shared scan, we must gather parallel to write tuples in producer. 
 					 * We also do that in partial_pathlist for possible parallel.
 					 */
 					if (rel->consider_parallel)
-						add_partial_path(rel, create_ctescan_path(root,
+					{
+						cte_path = create_ctescan_path(root,
 													  rel,
 													  NULL /* is_shared */,
 													  locus,
 													  pathkeys,
-													  required_outer));
+													  required_outer);
+
+						cte_path->barrierHazard = best_path->barrierHazard;
+						cte_path->motionHazard = best_path->motionHazard;
+						add_partial_path(rel,  cte_path);
+					}
 				}
 				return;
 			}
@@ -3514,21 +3525,29 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		Path	   *subpath = (Path *) lfirst(lc);
 		List	   *pathkeys;
 		CdbPathLocus locus;
+		Path		*cte_path = NULL;
 
 		locus = cdbpathlocus_from_subquery(root, rel, subpath);
 
 		/* Convert subquery pathkeys to outer representation */
 		pathkeys = convert_subquery_pathkeys(root, rel, subpath->pathkeys,
 											 make_tlist_from_pathtarget(subpath->pathtarget));
-
-		/* Generate appropriate path */
-		add_path(rel, create_ctescan_path(root,
+		
+		cte_path = create_ctescan_path(root,
 										  rel,
 										  is_shared ? NULL : subpath,
 										  locus,
 										  pathkeys,
-										  required_outer),
-				 root);
+										  required_outer);
+		if (is_shared)
+		{
+			/* if shared, there could be only one path of sub_final_rel. */
+			cte_path->barrierHazard = subpath->barrierHazard;
+			cte_path->motionHazard = subpath->motionHazard;
+		}
+
+		/* Generate appropriate path */
+		add_path(rel, cte_path, root);
 	}
 
 	/* Also add partial paths for cte, for possibile paralle join and etc. */
@@ -3566,12 +3585,17 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			/* Convert subquery pathkeys to outer representation */
 			pathkeys = convert_subquery_pathkeys(root, rel, subpath->pathkeys,
 											 make_tlist_from_pathtarget(subpath->pathtarget));
-			add_partial_path(rel, create_ctescan_path(root,
+
+			Path	*cte_path = create_ctescan_path(root,
 										  rel,
 										  NULL /* is_shared */,
 										  locus,
 										  pathkeys,
-										  required_outer));
+										  required_outer);
+
+			cte_path->barrierHazard = subpath->barrierHazard;
+			cte_path->barrierHazard = subpath->motionHazard;
+			add_partial_path(rel, cte_path);
 		}
 	}
 }

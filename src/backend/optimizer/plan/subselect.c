@@ -132,13 +132,11 @@ typedef struct
 								 * plan_tree_walker/mutator */
 	Bitmapset            *seen_subplans;
 	bool                  result;
+	int					  sisc_role;
 } contain_ShareInputScan_walk_context;
-
-static bool contain_ShareInputScan(PlannerInfo *root, Node *node);
 
 static bool
 contain_ShareInputScan_walk(Node *node, contain_ShareInputScan_walk_context *ctx);
-
 
 /*
  * Get the datatype/typmod/collation of the first column of the plan's output.
@@ -3603,12 +3601,13 @@ splan_is_initplan(List *plan_params, SubLinkType subLinkType)
 	return false;
 }
 
-static bool contain_ShareInputScan(PlannerInfo *root, Node *node)
+bool contain_ShareInputScan(PlannerInfo *root, Node *node)
 {
 	contain_ShareInputScan_walk_context ctx;
 	planner_init_plan_tree_base(&ctx.base, root);
 	ctx.result = false;
 	ctx.seen_subplans = NULL;
+	ctx.sisc_role = SISC_NONE;
 
 	(void) contain_ShareInputScan_walk(node, &ctx);
 
@@ -3619,9 +3618,6 @@ static bool
 contain_ShareInputScan_walk(Node *node, contain_ShareInputScan_walk_context *ctx)
 {
 	PlannerInfo *root = (PlannerInfo *) ctx->base.node;
-
-	if (ctx->result)
-		return true;
 
 	if (node == NULL)
 		return false;
@@ -3646,10 +3642,32 @@ contain_ShareInputScan_walk(Node *node, contain_ShareInputScan_walk_context *ctx
 	if (IsA(node, ShareInputScan))
 	{
 		ctx->result = true;
-		return true;
+
+		if (((Plan*) node)->lefttree != NULL)
+			ctx->sisc_role |= SISC_PRODUCER;
+		else
+			ctx->sisc_role |= SISC_CONSUMER;
+		
+		return false;
 	}
 
 	return plan_tree_walker((Node *) node, contain_ShareInputScan_walk, ctx, true);
+}
+
+/* 
+ * Similar to contain_ShareInputScan()
+ * with details about producer and consumer info.
+ */
+int contain_ShareInputScan_detail(PlannerInfo *root, Node *node)
+{
+	contain_ShareInputScan_walk_context ctx;
+	planner_init_plan_tree_base(&ctx.base, root);
+	ctx.result = false;
+	ctx.seen_subplans = NULL;
+	ctx.sisc_role = SISC_NONE;
+
+	(void) contain_ShareInputScan_walk(node, &ctx);
+	return ctx.sisc_role;
 }
 
 /*
