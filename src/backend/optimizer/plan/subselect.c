@@ -2788,6 +2788,21 @@ finalize_plan(PlannerInfo *root, Plan *plan,
 		}
 	}
 
+	if (IsA(plan, ShareInputScan) && plan->lefttree != NULL)
+	{
+		foreach(l, plan->lefttree->initPlan)
+		{
+			SubPlan    *initsubplan = (SubPlan *) lfirst(l);
+			ListCell   *l2;
+
+			foreach(l2, initsubplan->setParam)
+			{
+				initSetParam = bms_add_member(initSetParam, lfirst_int(l2));
+			}
+		}
+	}
+
+
 	/* Any setParams are validly referenceable in this node and children */
 	if (initSetParam)
 		valid_params = bms_union(valid_params, initSetParam);
