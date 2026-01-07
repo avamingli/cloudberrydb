@@ -586,6 +586,14 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		eager_subplan = true;
 
 	/*
+	 * Don't use subpan if there is modify operation, citd might be wrong.
+	 * 		with updated AS (update table_for_initplan set k = 33 where i = 3 returning k)
+	 * 			select table_for_initplan.*, (select sum(k) from updated) from table_for_initplan;
+	 */
+	if (contain_ModifyTable_plan(root, plan))
+		eager_subplan = false;
+
+	/*
 	 * Initialize the SubPlan node.  Note plan_id, plan_name, and cost fields
 	 * are set further down.
 	 */
@@ -3737,4 +3745,41 @@ is_single_simple_query(PlannerInfo *root)
 
 	/* OK, it's simple enough. */
 	return true;
+}
+
+typedef struct ModifyTableFinderContext
+{
+	plan_tree_base_prefix base; /* Required prefix for plan_tree_walker/mutator */
+	bool	found;
+} ModifyTableFinderContext;
+
+/*
+ * Walker to find a motion node that matches a particular motionID
+ */
+static bool
+ModifyTableFinderWalker (Plan *node, void *context)
+{
+	Assert(context);
+	ModifyTableFinderContext *ctx = (ModifyTableFinderContext *) context;
+
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, ModifyTable))
+	{
+		ctx->found = true;
+		return true;	/* found our node; no more visit */
+	}
+
+	/* Continue walking */
+	return plan_tree_walker((Node*)node, ModifyTableFinderWalker, ctx, true);
+}
+
+bool contain_ModifyTable_plan(PlannerInfo *root, Plan* node)
+{
+	ModifyTableFinderContext ctx;
+	ctx.base.node = (Node*)root;
+	ctx.found = false;
+	ModifyTableFinderWalker(node, &ctx);
+	return ctx.found;
 }

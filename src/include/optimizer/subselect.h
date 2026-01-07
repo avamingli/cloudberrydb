@@ -67,5 +67,6 @@ extern bool contain_ShareInputScan(PlannerInfo *root, Node *node);
 
 extern int contain_ShareInputScan_detail(PlannerInfo *root, Node *node);
 
+extern bool contain_ModifyTable_plan(PlannerInfo *root, Plan* node);
 
 #endif							/* SUBSELECT_H */
