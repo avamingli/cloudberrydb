@@ -1792,7 +1792,11 @@ set_subqueryscan_references(PlannerInfo *root,
 				 * But don't correct varattno here as the var could be inside expression
 				 * recursivily, do it in change_varattnos_of_ShareInputScan().
 				 */
-				if (cteplaninfo->attr_map->attnums[var->varattno - 1] == 0)
+				if (var->varattno == 0)
+				{
+					/* whole row, don't change. */
+				}
+				else if (cteplaninfo->attr_map->attnums[var->varattno - 1] == 0)
 				{
 					tle->expr = (Expr *)makeNullConst(exprType((Node *)var),
 													   exprTypmod((Node *)var),

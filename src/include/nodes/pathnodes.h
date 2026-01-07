@@ -546,6 +546,7 @@ typedef struct CtePlanInfo
 	Relids relids;
 	
 	bool push_quals_possible;
+	bool save_columns_possible;
 	
 	Bitmapset	*attrs_used;
 	AttrMap 	*attr_map;

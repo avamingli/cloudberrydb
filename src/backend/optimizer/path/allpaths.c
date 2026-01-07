@@ -3248,8 +3248,9 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 
 			cteplaninfo->subroot = subroot;
 			cteplaninfo->push_quals_possible = true;
+			cteplaninfo->save_columns_possible = true;
 			if (!contain_volatile_function &&
-				(cte->ctematerialized != CTEMaterializeDefault) && /* Don't change if user has the decision. */
+				(cte->ctematerialized == CTEMaterializeDefault) && /* Don't change if user has the decision. */
 				cbdb_enable_dynamic_shared_scan &&
 				(sub_final_rel->cheapest_total_path->rows >= 10 * cte->cterefcount * sub_final_rel->cheapest_total_path->total_cost))
 			{
@@ -3311,10 +3312,16 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		}
 		cteplaninfo->attrs_used = bms_union(cteplaninfo->attrs_used, attrs_used);
 
+		if (cteplaninfo->save_columns_possible)
+		{
+			/* If there is whole row, we can't save any columns. */
+			if (bms_is_member(-FirstLowInvalidHeapAttributeNumber, cteplaninfo->attrs_used))
+				cteplaninfo->save_columns_possible = false;
+			else
+				cteplaninfo->save_columns_possible = (bms_num_members(cteplaninfo->attrs_used) != list_length(cteplaninfo->subquery->targetList));
+		}
 
-		//TODO: no OR quals share should also remove unused columns
-		if (cteplaninfo->push_quals_possible ||
-			bms_num_members(cteplaninfo->attrs_used) != list_length(cteplaninfo->subquery->targetList))
+		if (cteplaninfo->push_quals_possible || cteplaninfo->save_columns_possible)
 		{
 			/* Also replace Vars with subquery's targetlist */
 			List *quals = collect_cte_quals(root, rel, rte, rel->relid, subquery);
@@ -3332,8 +3339,7 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 
 
 			if (list_length(cteplaninfo->rels) == cte->cterefcount &&
-				(cteplaninfo->push_quals_possible ||
-				bms_num_members(cteplaninfo->attrs_used) != list_length(cteplaninfo->subquery->targetList)))
+				(cteplaninfo->push_quals_possible || cteplaninfo->save_columns_possible))
 			{
 				/* Do a second plan for shared cte. */
 
@@ -3363,7 +3369,7 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 				}
 
 				// remove unused columns
-				if (bms_num_members(cteplaninfo->attrs_used) != list_length(cteplaninfo->subquery->targetList))
+				if (cteplaninfo->save_columns_possible)
 					remove_cte_unused_subquery_outputs(cteplaninfo);
 
 				subroot = subquery_planner(cteroot->glob, cteplaninfo->subquery, cteroot, cte->cterecursive,
