@@ -3130,7 +3130,13 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			 * ) ss;
 			 *
 			 */
-			is_shared =  contain_volatile_function ? true : (root->config->gp_cte_sharing && (cte->cterefcount > 1));
+			{
+				/* XXX: could it be 0 ? */
+				if (cte->cterefcount <= 1)
+					is_shared = false;
+				else
+					is_shared = contain_volatile_function ? true : root->config->gp_cte_sharing;
+			}
 	}
 
 	/*
