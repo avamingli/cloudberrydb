@@ -593,6 +593,10 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 	if (contain_ModifyTable_plan(root, plan))
 		eager_subplan = false;
 
+	/* Don't eager subplan if we are already on QD, else a broadcast under SubPlan will cause inactive Motion. */
+	if (plan->locustype == CdbLocusType_Entry)
+		eager_subplan = false;
+
 	/*
 	 * Initialize the SubPlan node.  Note plan_id, plan_name, and cost fields
 	 * are set further down.
