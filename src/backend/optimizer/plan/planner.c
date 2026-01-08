@@ -735,11 +735,18 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 	 *
 	 * apply_shareinput will fix shared_id, and change the DAG to a tree.
 	 */
+	int subplan_id = 0;
 	forboth(lp, glob->subplans, lr, glob->subroots)
 	{
 		Plan	   *subplan = (Plan *) lfirst(lp);
 		PlannerInfo	   *subroot = (PlannerInfo *) lfirst(lr);
+		subplan_id++;
+
 		apply_shareinput_dag_to_tree_from_subplan = true;
+
+		/* We must make producer in InitPlan if it was. */
+		if (bms_is_member(subplan_id, root->init_plan_ids))
+			apply_shareinput_dag_to_tree_from_subplan = false;
 
 		lfirst(lp) = apply_shareinput_dag_to_tree(subroot, subplan);
 	}
@@ -934,6 +941,7 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	root->eq_classes = NIL;
 	root->non_eq_clauses = NIL;
 	root->init_plans = NIL;
+	root->init_plan_ids = NULL;
 
 	root->list_cteplaninfo = NIL;
 	if (parse->cteList != NIL)

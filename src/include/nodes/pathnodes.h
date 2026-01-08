@@ -518,6 +518,8 @@ struct PlannerInfo
 	int 		lower_window_filter_winref; /* winref of subquery. */
 	Node		*upper_window_filter; /* simple window function from parent query.*/
 	int 		upper_window_filter_winref; /* winref of subquery. */
+
+	Bitmapset	*init_plan_ids;		/* init SubPlans plan_ids for query */
 };
 
 /*

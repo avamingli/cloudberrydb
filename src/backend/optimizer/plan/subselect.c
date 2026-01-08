@@ -582,6 +582,9 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 
 	if (subroot->is_shared_scan)
 		eager_subplan = true;
+	else if (plan->locustype == CdbLocusType_Entry)
+		/* Don't eager subplan if we are already on QD, else a broadcast under SubPlan will cause inactive Motion. */
+		eager_subplan = false;
 	else if (cbdb_eager_subplan && !is_single_simple_query(subroot))
 		eager_subplan = true;
 
@@ -593,9 +596,15 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 	if (contain_ModifyTable_plan(root, plan))
 		eager_subplan = false;
 
-	/* Don't eager subplan if we are already on QD, else a broadcast under SubPlan will cause inactive Motion. */
-	if (plan->locustype == CdbLocusType_Entry)
-		eager_subplan = false;
+	/*
+	 * InitPlan can't have ShareInputScan, neither producer or consumer in same slice, else it will hang.
+	 * However, we don't know the slice info here, so make it to subplan.
+	 * 
+	 * WITH q1(x,y) AS (SELECT hundred, sum(ten) FROM tenk1 GROUP BY hundred)
+	 * SELECT count(*) FROM q1 WHERE y > (SELECT sum(y)/100 FROM q1 qsub);
+	 */
+	if (contain_ShareInputScan(root, (Node *)plan))
+		eager_subplan = true;
 
 	/*
 	 * Initialize the SubPlan node.  Note plan_id, plan_name, and cost fields
@@ -826,7 +835,10 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 	splan->plan_id = list_length(root->glob->subplans);
 
 	if (splan->is_initplan)
+	{
 		root->init_plans = lappend(root->init_plans, splan);
+		root->init_plan_ids = bms_add_member(root->init_plan_ids, splan->plan_id);
+	}
 
 	/*
 	 * A parameterless subplan (not initplan) should be prepared to handle
@@ -3600,6 +3612,7 @@ SS_make_initplan_from_plan(PlannerInfo *root,
 	node->setParam = list_make1_int(prm->paramid);
 
 	root->init_plans = lappend(root->init_plans, node);
+	root->init_plan_ids = bms_add_member(root->init_plan_ids, node->plan_id);
 
 	/*
 	 * The node can't have any inputs (since it's an initplan), so the
