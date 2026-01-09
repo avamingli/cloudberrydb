@@ -24,6 +24,8 @@
 #include "nodes/primnodes.h"
 #include "parsenodes.h"
 
+typedef	struct CtePlanInfo CtePlanInfo;
+
 typedef struct DirectDispatchInfo
 {
 	/*
@@ -1251,6 +1253,8 @@ typedef struct ShareInputScan
 
 	/* Ubderlying cte name. */
 	char* 		ctename;
+	
+	CtePlanInfo* 		cteplaninfo;
 } ShareInputScan;
 
 /* ----------------

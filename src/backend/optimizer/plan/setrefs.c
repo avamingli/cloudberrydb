@@ -215,7 +215,7 @@ static bool cdb_extract_plan_dependencies_walker(Node *node,
 									 cdb_extract_plan_dependencies_context *context);
 
 static CtePlanInfo *
-get_cte_plan_info(PlannerInfo *root, Index scanrelid);
+get_cte_plan_info(Plan *plan);
 
 typedef struct CteAttrMapContext
 {
@@ -1586,54 +1586,10 @@ set_indexonlyscan_references(PlannerInfo *root,
 }
 
 CtePlanInfo *
-get_cte_plan_info(PlannerInfo *root, Index scanrelid)
+get_cte_plan_info(Plan *plan)
 {
-	CtePlanInfo *cteplaninfo;
-	PlannerInfo *cteroot;
-	Index		levelsup;
-	int			planinfo_id;
-	int			ndx;
-	ListCell   *lc;
-
-	RangeTblEntry *rte = rt_fetch(scanrelid, root->glob->finalrtable);
-	Assert(rte);
-	Assert(rte->rtekind == RTE_CTE);
-
-	levelsup = rte->ctelevelsup;
-	cteroot = root;
-	while (levelsup-- > 0)
-	{
-		cteroot = cteroot->parent_root;
-		if (!cteroot)			/* shouldn't happen */
-			elog(ERROR, "bad levelsup for CTE \"%s\"", rte->ctename);
-	}
-
-	ndx = 0;
-	foreach(lc, cteroot->parse->cteList)
-	{
-		CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
-
-		if (strcmp(cte->ctename, rte->ctename) == 0)
-			break;
-		ndx++;
-	}
-	if (lc == NULL)				/* shouldn't happen */
-		elog(ERROR, "could not find CTE \"%s\"", rte->ctename);
-
-	/*
-	 * In PostgreSQL, we use the index to look up the plan ID in the
-	 * cteroot->cte_plan_ids list. In GPDB, CTE plans work differently, and
-	 * we look up the CtePlanInfo struct in the list_cteplaninfo instead.
-	 */
-	planinfo_id = ndx;
-
-	if (planinfo_id < 0 || planinfo_id >= list_length(cteroot->list_cteplaninfo))
-		elog(ERROR, "could not find plan for CTE \"%s\"", rte->ctename);
-
-	Assert(list_length(cteroot->list_cteplaninfo) > planinfo_id);
-	cteplaninfo = list_nth(cteroot->list_cteplaninfo, planinfo_id);
-
-	return cteplaninfo;
+	Assert(IsA(plan, ShareInputScan));
+	return ((ShareInputScan*) plan)->cteplaninfo;
 }
 
 /*
@@ -1687,6 +1643,8 @@ set_subqueryscan_references(PlannerInfo *root,
 	RelOptInfo *rel;
 	Plan	   *result;
 	bool is_producer = false;
+	CtePlanInfo *cteplaninfo = NULL;
+	bool 	omit_subqueryscan = true;
 
 	/* Need to look up the subquery's RelOptInfo, since we need its subroot */
 	rel = find_base_rel(root, plan->scan.scanrelid);
@@ -1694,17 +1652,22 @@ set_subqueryscan_references(PlannerInfo *root,
 	/* Recursively process the subplan */
 	plan->subplan = set_plan_references(rel->subroot, plan->subplan);
 
-	if (IsA(plan->subplan, ShareInputScan) &&
-		(plan->subplan->lefttree != NULL))
+	if (IsA(plan->subplan, ShareInputScan))
 	{
-		is_producer = true;
+		if (plan->subplan->lefttree != NULL)
+			is_producer = true;
+
+		cteplaninfo = get_cte_plan_info(plan->subplan);
+
+		if (cteplaninfo->attr_map != NULL)
+			omit_subqueryscan = false; /* can not omit as we will adjust columns.*/
 	}
 
 	/*
 	 * Producer needs to insert Result node, so don't omit here.
 	 * Consumer needs to adjust targetlist too.
 	 */
-	if (!IsA(plan->subplan, ShareInputScan) && trivial_subqueryscan(plan))
+	if (omit_subqueryscan && trivial_subqueryscan(plan))
 	{
 		/*
 		 * We can omit the SubqueryScan node and just pull up the subplan.
@@ -1721,10 +1684,6 @@ set_subqueryscan_references(PlannerInfo *root,
 		 * outputs to begin with.
 		 */
 		plan->scan.scanrelid += rtoffset;
-
-		CtePlanInfo *cteplaninfo = NULL;
-		if (IsA(plan->subplan, ShareInputScan))
-			cteplaninfo = get_cte_plan_info(root, plan->scan.scanrelid);
 
 		if (IsA(plan->subplan, ShareInputScan) &&
 			(cteplaninfo->attr_map != NULL))
@@ -1827,7 +1786,6 @@ set_subqueryscan_references(PlannerInfo *root,
 			(cteplaninfo->attr_map != NULL))
 		{
 			/* after fix_scan_list, the vano could be changed to subquery, we need to adjust the columns for explain */
-			CtePlanInfo *cteplaninfo = get_cte_plan_info(root, plan->scan.scanrelid);
 			RangeTblEntry *rte = rt_fetch(plan->scan.scanrelid, root->glob->finalrtable);
 
 			/*

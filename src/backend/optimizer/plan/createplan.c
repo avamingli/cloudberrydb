@@ -4781,6 +4781,7 @@ create_ctescan_plan(PlannerInfo *root, Path *best_path,
 		}
 		/* Wrap the common Plan tree in a ShareInputScan node */
 		subplan = share_prepared_plan(cteroot, cteplaninfo->shared_plan, rte->ctename);
+		((ShareInputScan*) subplan)->cteplaninfo = cteplaninfo;
 	}
 
 	scan_plan = (Plan *) make_subqueryscan(tlist,
