@@ -3416,7 +3416,7 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 
 				Path *best_path = sub_final_rel->cheapest_total_path;
 				CdbPathLocus locus;
-				double		sub_total_rows;
+				double		sub_total_rows = 0;
 
 				if (!IS_DUMMY_REL(sub_final_rel))
 				{
@@ -3430,6 +3430,8 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 
 				}
 
+				if (sub_total_rows == 0)
+					sub_total_rows = 1;
 				/*  Mark rel with estimated output rows, width for producer only. */
 				set_cte_size_estimates(root, rel, sub_total_rows);
 

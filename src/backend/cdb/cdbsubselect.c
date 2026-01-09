@@ -587,9 +587,9 @@ convert_EXPR_to_join(PlannerInfo *root, OpExpr *opexp)
 	Assert(root);
 	Assert(list_length(opexp->args) == 2);
 
-	Node *rarg;
+	Node *rarg = NULL;
 	Node *n_tmp = (Node*) opexp; 
-	OpExpr *op_tmp;
+	OpExpr *op_tmp = NULL;
 
 	while (IsA(n_tmp, OpExpr))
 	{
