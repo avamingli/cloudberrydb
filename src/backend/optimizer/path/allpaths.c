@@ -3137,6 +3137,9 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 					is_shared = false;
 				else
 					is_shared = root->config->gp_cte_sharing;
+
+				if (Gp_role == GP_ROLE_EXECUTE)
+					is_shared = false;
 			}
 	}
 
