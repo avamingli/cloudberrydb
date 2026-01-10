@@ -1937,23 +1937,21 @@ select * from tt24v;
                                         QUERY PLAN                                        
 ------------------------------------------------------------------------------------------
  Hash Join
-   Output: (cte.r).column2, ((ROW("*VALUES*".column1, "*VALUES*".column2))).column2
-   Hash Cond: (((ROW("*VALUES*".column1, "*VALUES*".column2))).column1 = (cte.r).column1)
+   Output: (share0_ref1.r).column2, ((ROW("*VALUES*".column1, "*VALUES*".column2))).column2
+   Hash Cond: (((ROW("*VALUES*".column1, "*VALUES*".column2))).column1 = (share0_ref1.r).column1)
    ->  Limit
          Output: (ROW("*VALUES*".column1, "*VALUES*".column2))
          ->  Values Scan on "*VALUES*"
                Output: ROW("*VALUES*".column1, "*VALUES*".column2)
    ->  Hash
-         Output: cte.r
-         ->  Subquery Scan on cte
-               Output: cte.r
-               ->  Shared Scan (share slice:id 0:0)
-                     Output: share0_ref1.r
-                     ->  Values Scan on "*VALUES*_1"
-                           Output: ROW("*VALUES*_1".column1, "*VALUES*_1".column2)
+         Output: share0_ref1.r
+         ->  Shared Scan (share slice:id 0:0)
+               Output: share0_ref1.r
+               ->  Values Scan on "*VALUES*_1"
+                     Output: ROW("*VALUES*_1".column1, "*VALUES*_1".column2)
  Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(17 rows)
+(15 rows)
 
 explain (verbose, costs off)
 select (r).column2 from (select r from (values(1,2),(3,4)) r limit 1) ss;

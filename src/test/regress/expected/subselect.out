@@ -1785,33 +1785,30 @@ select * from x where f1 = 1;
 explain (verbose, costs off)
 with x as (select * from (select f1, current_database() as n from subselect_tbl) ss)
 select * from x, x x2 where x.n = x2.n;
-                                                                                                                                                           QUERY PLAN                                                                                                                                                            
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: x.f1, x.n, x2.f1, x2.n
+   Output: share0_ref2.f1, share0_ref2.n, share0_ref1.f1, share0_ref1.n
    ->  Hash Join
-         Output: x.f1, x.n, x2.f1, x2.n
-         Hash Cond: (x.n = x2.n)
+         Output: share0_ref2.f1, share0_ref2.n, share0_ref1.f1, share0_ref1.n
+         Hash Cond: (share0_ref2.n = share0_ref1.n)
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Output: x.f1, x.n
-               Hash Key: x.n
-               ->  Subquery Scan on x
-                     Output: x.f1, x.n
-                     ->  Shared Scan (share slice:id 2:0)
-                           Output: share0_ref2.f1, share0_ref2.n
+               Output: share0_ref2.f1, share0_ref2.n
+               Hash Key: share0_ref2.n
+               ->  Shared Scan (share slice:id 2:0)
+                     Output: share0_ref2.f1, share0_ref2.n
          ->  Hash
-               Output: x2.f1, x2.n
+               Output: share0_ref1.f1, share0_ref1.n
                ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                     Output: x2.f1, x2.n
-                     Hash Key: x2.n
-                     ->  Subquery Scan on x2
-                           Output: x2.f1, x2.n
-                           ->  Shared Scan (share slice:id 3:0)
-                                 Output: share0_ref1.f1, share0_ref1.n
-                                 ->  Seq Scan on public.subselect_tbl
-                                       Output: subselect_tbl.f1, 'regression'::name
+                     Output: share0_ref1.f1, share0_ref1.n
+                     Hash Key: share0_ref1.n
+                     ->  Shared Scan (share slice:id 3:0)
+                           Output: share0_ref1.f1, share0_ref1.n
+                           ->  Seq Scan on public.subselect_tbl
+                                 Output: subselect_tbl.f1, 'regression'::name
+ Settings: gp_cte_sharing = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(25 rows)
+(21 rows)
 
 explain (verbose, costs off)
 with x as not materialized (select * from (select f1, current_database() as n from subselect_tbl) ss)
@@ -1952,18 +1949,16 @@ select * from (with y as (select * from x) select * from y) ss;
 explain (verbose, costs off)
 with x as materialized (select * from int4_tbl)
 select * from (with y as (select * from x) select * from y) ss;
-                 QUERY PLAN                 
---------------------------------------------
+                     QUERY PLAN                     
+----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: x.f1
-   ->  Subquery Scan on x
-         Output: x.f1
-         ->  Shared Scan (share slice:id 1:0)
-               Output: share0_ref1.f1
-               ->  Seq Scan on public.int4_tbl
-                     Output: int4_tbl.f1
+   Output: share0_ref1.f1
+   ->  Shared Scan (share slice:id 1:0)
+         Output: share0_ref1.f1
+         ->  Seq Scan on public.int4_tbl
+               Output: int4_tbl.f1
+ Settings: gp_cte_sharing = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing=on, optimizer=off
 (8 rows)
 
 -- Ensure that we inline the currect CTE when there are
