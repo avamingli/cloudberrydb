@@ -2472,49 +2472,62 @@ set local enable_hashagg to false;
 set local enable_parallel = off;
 explain (costs off, locus)
 select c, sum(a), avg(b), count(*) from pagg_tab group by 1 having avg(d) < 15 order by 1, 2, 3;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Sort
    Locus: Entry
    Sort Key: pagg_tab.c, (sum(pagg_tab.a)), (avg(pagg_tab.b))
-   ->  Append
+   ->  Merge Append
          Locus: Entry
-         ->  Finalize GroupAggregate
-               Locus: Entry
-               Group Key: pagg_tab.c
-               Filter: (avg(pagg_tab.d) < '15'::numeric)
-               ->  Gather Motion 3:1  (slice1; segments: 3)
-                     Locus: Entry
-                     Merge Key: pagg_tab.c
-                     ->  Partial GroupAggregate
+         Sort Key: pagg_tab.c
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               Locus: SingleQE
+               Merge Key: pagg_tab.c
+               ->  Finalize GroupAggregate
+                     Locus: Hashed
+                     Group Key: pagg_tab.c
+                     Filter: (avg(pagg_tab.d) < '15'::numeric)
+                     ->  Sort
                            Locus: Hashed
-                           Group Key: pagg_tab.c
-                           ->  Sort
+                           Sort Key: pagg_tab.c
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
                                  Locus: Hashed
-                                 Sort Key: pagg_tab.c
-                                 ->  Seq Scan on pagg_tab_p1 pagg_tab
+                                 Hash Key: pagg_tab.c
+                                 ->  Partial GroupAggregate
                                        Locus: Hashed
-         ->  Finalize GroupAggregate
-               Locus: Entry
-               Group Key: pagg_tab_1.c
-               Filter: (avg(pagg_tab_1.d) < '15'::numeric)
-               ->  Gather Motion 3:1  (slice2; segments: 3)
-                     Locus: Entry
-                     Merge Key: pagg_tab_1.c
-                     ->  Partial GroupAggregate
+                                       Group Key: pagg_tab.c
+                                       ->  Sort
+                                             Locus: Hashed
+                                             Sort Key: pagg_tab.c
+                                             ->  Seq Scan on pagg_tab_p1 pagg_tab
+                                                   Locus: Hashed
+         ->  Gather Motion 3:1  (slice3; segments: 3)
+               Locus: SingleQE
+               Merge Key: pagg_tab_1.c
+               ->  Finalize GroupAggregate
+                     Locus: Hashed
+                     Group Key: pagg_tab_1.c
+                     Filter: (avg(pagg_tab_1.d) < '15'::numeric)
+                     ->  Sort
                            Locus: Hashed
-                           Group Key: pagg_tab_1.c
-                           ->  Sort
+                           Sort Key: pagg_tab_1.c
+                           ->  Redistribute Motion 3:3  (slice4; segments: 3)
                                  Locus: Hashed
-                                 Sort Key: pagg_tab_1.c
-                                 ->  Seq Scan on pagg_tab_p2 pagg_tab_1
+                                 Hash Key: pagg_tab_1.c
+                                 ->  Partial GroupAggregate
                                        Locus: Hashed
+                                       Group Key: pagg_tab_1.c
+                                       ->  Sort
+                                             Locus: Hashed
+                                             Sort Key: pagg_tab_1.c
+                                             ->  Seq Scan on pagg_tab_p2 pagg_tab_1
+                                                   Locus: Hashed
          ->  Finalize GroupAggregate
-               Locus: Entry
+               Locus: SingleQE
                Group Key: pagg_tab_2.c
                Filter: (avg(pagg_tab_2.d) < '15'::numeric)
-               ->  Gather Motion 3:1  (slice3; segments: 3)
-                     Locus: Entry
+               ->  Gather Motion 3:1  (slice5; segments: 3)
+                     Locus: SingleQE
                      Merge Key: pagg_tab_2.c
                      ->  Partial GroupAggregate
                            Locus: Hashed
@@ -2525,7 +2538,7 @@ select c, sum(a), avg(b), count(*) from pagg_tab group by 1 having avg(d) < 15 o
                                  ->  Seq Scan on pagg_tab_p3 pagg_tab_2
                                        Locus: Hashed
  Optimizer: Postgres query optimizer
-(51 rows)
+(64 rows)
 
 abort;
 --
@@ -3101,18 +3114,21 @@ insert into t_distinct_0 select * from t_distinct_0;
 analyze t_distinct_0;
 explain(costs off)
 select distinct a from t_distinct_0;
-                         QUERY PLAN
-------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  HashAggregate
+   Merge Key: a
+   ->  GroupAggregate
          Group Key: a
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: a
-               ->  Streaming HashAggregate
-                     Group Key: a
-                     ->  Seq Scan on t_distinct_0
+         ->  Sort
+               Sort Key: a
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: a
+                     ->  Streaming HashAggregate
+                           Group Key: a
+                           ->  Seq Scan on t_distinct_0
  Optimizer: Postgres query optimizer
-(9 rows)
+(12 rows)
 
 set enable_parallel = on;
 -- first stage HashAgg, second stage GroupAgg
@@ -3135,7 +3151,7 @@ select distinct a from t_distinct_0;
  Optimizer: Postgres query optimizer
 (13 rows)
 
-set parallel_query_use_streaming_hashagg = off;
+set gp_use_streaming_hashagg = off;
 explain(costs off)
 select distinct a from t_distinct_0;
                             QUERY PLAN                            
@@ -3197,7 +3213,7 @@ select distinct a from t_distinct_0;
  Optimizer: Postgres query optimizer
 (10 rows)
 
-set parallel_query_use_streaming_hashagg = on;
+set gp_use_streaming_hashagg = on;
 explain(costs off)
 select distinct a from t_distinct_0;
                          QUERY PLAN                         
@@ -3486,24 +3502,26 @@ WHERE e.salary > (
     SELECT AVG(salary)
     FROM employees
     WHERE department_id = e.department_id);
-                                                        QUERY PLAN                                                         
----------------------------------------------------------------------------------------------------------------------------
- Gather Motion 6:1  (slice1; segments: 6)  (cost=116.58..230.86 rows=3767 width=218)
-   ->  Parallel Hash Join  (cost=116.58..186.92 rows=628 width=218)
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6)  (cost=118.92..233.20 rows=3767 width=218)
+   ->  Parallel Hash Join  (cost=118.92..189.25 rows=628 width=218)
          Hash Cond: (e.department_id = "Expr_SUBQUERY".csq_c0)
          Join Filter: (e.salary > "Expr_SUBQUERY".csq_c1)
          ->  Parallel Seq Scan on employees e  (cost=0.00..52.83 rows=1883 width=254)
-         ->  Parallel Hash  (cost=110.33..110.33 rows=500 width=36)
-               ->  Broadcast Workers Motion 6:6  (slice2; segments: 6)  (cost=99.92..110.33 rows=500 width=36)
-                     ->  Subquery Scan on "Expr_SUBQUERY"  (cost=99.92..103.67 rows=167 width=36)
-                           ->  HashAggregate  (cost=99.92..102.00 rows=167 width=36)
+         ->  Parallel Hash  (cost=112.67..112.67 rows=500 width=36)
+               ->  Broadcast Workers Motion 6:6  (slice2; segments: 6)  (cost=102.25..112.67 rows=500 width=36)
+                     ->  Subquery Scan on "Expr_SUBQUERY"  (cost=102.25..106.00 rows=167 width=36)
+                           ->  Finalize HashAggregate  (cost=102.25..104.33 rows=167 width=36)
                                  Group Key: employees.department_id
-                                 ->  Redistribute Motion 6:6  (slice3; segments: 6)  (cost=0.00..90.50 rows=1883 width=36)
+                                 ->  Redistribute Motion 6:6  (slice3; segments: 6)  (cost=62.25..94.75 rows=1000 width=36)
                                        Hash Key: employees.department_id
                                        Hash Module: 3
-                                       ->  Parallel Seq Scan on employees  (cost=0.00..52.83 rows=1883 width=36)
+                                       ->  Streaming Partial HashAggregate  (cost=62.25..74.75 rows=1000 width=36)
+                                             Group Key: employees.department_id
+                                             ->  Parallel Seq Scan on employees  (cost=0.00..52.83 rows=1883 width=36)
  Optimizer: Postgres query optimizer
-(15 rows)
+(17 rows)
 
 SELECT e.name
 FROM employees e
@@ -3527,8 +3545,8 @@ explain(locus, costs off) with x as
   (select a, count(*) as b from t1 group by a union all
     select a, count(*) as b from t2 group by a)
   select count(*) from x a join x b on a.a = b.b;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                                                    QUERY PLAN                                                    
+------------------------------------------------------------------------------------------------------------------
  Finalize Aggregate
    Locus: Entry
    ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -3537,34 +3555,62 @@ explain(locus, costs off) with x as
                Locus: Hashed
                ->  Hash Join
                      Locus: Hashed
-                     Hash Cond: (b.b = a.a)
+                     Hash Cond: (a.a = b.b)
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)
                            Locus: Hashed
-                           Hash Key: b.b
-                           ->  Subquery Scan on b
+                           Hash Key: a.a
+                           ->  Subquery Scan on a
                                  Locus: Strewn
                                  ->  Shared Scan (share slice:id 2:0)
-                                       Locus: Hashed
+                                       Locus: Strewn
                      ->  Hash
                            Locus: Hashed
-                           ->  Subquery Scan on a
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
                                  Locus: Hashed
-                                 ->  Shared Scan (share slice:id 1:0)
-                                       Locus: Hashed
-                                       ->  Append
-                                             Locus: Hashed
-                                             ->  HashAggregate
-                                                   Locus: Hashed
-                                                   Group Key: t1.a
-                                                   ->  Seq Scan on t1
+                                 Hash Key: b.b
+                                 ->  Subquery Scan on b
+                                       Locus: Strewn
+                                       ->  Shared Scan (share slice:id 3:0)
+                                             Locus: Strewn
+                                             ->  Redistribute Motion 6:3  (slice4; segments: 6)
+                                                   Locus: Strewn
+                                                   ->  Append
                                                          Locus: Hashed
-                                             ->  HashAggregate
-                                                   Locus: Hashed
-                                                   Group Key: t2.a
-                                                   ->  Seq Scan on t2
-                                                         Locus: Hashed
+                                                         Parallel Workers: 2
+                                                         ->  Finalize HashAggregate
+                                                               Locus: Hashed
+                                                               Parallel Workers: 2
+                                                               Group Key: t2.a
+                                                               ->  Redistribute Motion 6:6  (slice5; segments: 6)
+                                                                     Locus: Hashed
+                                                                     Parallel Workers: 2
+                                                                     Hash Key: t2.a
+                                                                     Hash Module: 3
+                                                                     ->  Streaming Partial HashAggregate
+                                                                           Locus: HashedWorkers
+                                                                           Parallel Workers: 2
+                                                                           Group Key: t2.a
+                                                                           ->  Parallel Seq Scan on t2
+                                                                                 Locus: HashedWorkers
+                                                                                 Parallel Workers: 2
+                                                         ->  Finalize HashAggregate
+                                                               Locus: Hashed
+                                                               Parallel Workers: 2
+                                                               Group Key: t1.a
+                                                               ->  Redistribute Motion 6:6  (slice6; segments: 6)
+                                                                     Locus: Hashed
+                                                                     Parallel Workers: 2
+                                                                     Hash Key: t1.a
+                                                                     Hash Module: 3
+                                                                     ->  Streaming Partial HashAggregate
+                                                                           Locus: HashedWorkers
+                                                                           Parallel Workers: 2
+                                                                           Group Key: t1.a
+                                                                           ->  Parallel Seq Scan on t1
+                                                                                 Locus: HashedWorkers
+                                                                                 Parallel Workers: 2
  Optimizer: Postgres query optimizer
-(35 rows)
+(63 rows)
 
 reset gp_cte_sharing;
 reset enable_parallel;

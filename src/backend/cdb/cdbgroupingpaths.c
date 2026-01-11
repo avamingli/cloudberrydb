@@ -791,6 +791,7 @@ create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
 
 	if (!ctx->groupingSets &&
 		(ctx->hasAggs || ctx->groupClause != NIL) &&
+		!ctx->is_distinct &&
 		(list_length(ctx->agg_costs->distinctAggrefs) == 0) &&
 		cheapest_partial_path)
 	{
@@ -2826,7 +2827,7 @@ static void add_first_stage_group_agg_partial_path(PlannerInfo *root,
 {
 	double		dNumGroups;
 
-	if (ctx->agg_costs->distinctAggrefs)
+	if (list_length(ctx->agg_costs->distinctAggrefs) != 0)
 		return;
 
 	dNumGroups = estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
