@@ -3280,6 +3280,14 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 						{
 							CdbPathLocus locus = cdbpathlocus_from_subquery(root, sub_final_rel, partial_path);
 							locus.parallel_workers = 0;
+							/*
+							 * We force to add a Motion to gather partial paths becuase Shared Scan producer could be only
+							 * one process to write tuples.
+							 * But the locus might be not fit enough for join, ex: HashedWrokers with parallel_workers would be
+							 * buggy. And a Redistribute Motion will make HashedWorkers to be Hashed.
+							 */
+							if (CdbPathLocus_IsHashedWorkers(locus))
+								locus.locustype = CdbLocusType_Hashed;
 
 							partial_path = cdbpath_create_motion_path(subroot,
 																		partial_path,
@@ -3399,6 +3407,11 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 						{
 							CdbPathLocus locus = cdbpathlocus_from_subquery(root, sub_final_rel, partial_path);
 							locus.parallel_workers = 0;
+							/*
+							 * See comments above.
+							 */
+							if (CdbPathLocus_IsHashedWorkers(locus))
+								locus.locustype = CdbLocusType_Hashed;
 
 							partial_path = cdbpath_create_motion_path(subroot,
 																		partial_path,
