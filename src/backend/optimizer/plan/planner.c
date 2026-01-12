@@ -4612,7 +4612,10 @@ consider_groupingsets_paths(PlannerInfo *root,
 			dNumGroups = clamp_row_est(dNumGroupsTotal /
 									   CdbPathLocus_NumSegments(path->locus));
 			if (path->locus.parallel_workers > 1)
+			{
 				dNumGroups /= path->locus.parallel_workers;
+				dNumGroups = clamp_row_est(dNumGroups);
+			}
 		}
 		else
 			dNumGroups = dNumGroupsTotal;

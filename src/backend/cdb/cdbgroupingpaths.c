@@ -1044,7 +1044,10 @@ add_first_stage_group_agg_path(PlannerInfo *root,
 	dNumGroups = estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
 												path->rows, path->locus);
 	if (path->parallel_workers > 1)
+	{
 		dNumGroups /= path->parallel_workers;
+		dNumGroups = clamp_row_est(dNumGroups);
+	}
 
 	/*
 	 * DISTINCT-qualified aggregates are accepted only in the special
@@ -1280,7 +1283,10 @@ add_first_stage_hash_agg_path(PlannerInfo *root,
 												path->rows, path->locus);
 
 	if (path->parallel_workers > 1)
+	{
 		dNumGroups /= path->parallel_workers;
+		dNumGroups = clamp_row_est(dNumGroups);
+	}
 
 	if (parse->groupingSets && ctx->new_rollups)
 	{
@@ -2833,7 +2839,10 @@ static void add_first_stage_group_agg_partial_path(PlannerInfo *root,
 	dNumGroups = estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
 												path->rows, path->locus);
 	if (path->parallel_workers > 1)
+	{
 		dNumGroups /= path->parallel_workers;
+		dNumGroups = clamp_row_est(dNumGroups);
+	}
 
 	if (!is_sorted)
 	{
