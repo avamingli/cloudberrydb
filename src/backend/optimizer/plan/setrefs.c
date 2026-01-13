@@ -1659,7 +1659,7 @@ set_subqueryscan_references(PlannerInfo *root,
 
 		cteplaninfo = get_cte_plan_info(plan->subplan);
 
-		if (cteplaninfo->attr_map != NULL)
+		if (cteplaninfo && cteplaninfo->attr_map != NULL)
 			omit_subqueryscan = false; /* can not omit as we will adjust columns.*/
 	}
 
@@ -1686,6 +1686,7 @@ set_subqueryscan_references(PlannerInfo *root,
 		plan->scan.scanrelid += rtoffset;
 
 		if (IsA(plan->subplan, ShareInputScan) &&
+			cteplaninfo &&
 			(cteplaninfo->attr_map != NULL))
 		{
 			/*
@@ -1783,6 +1784,7 @@ set_subqueryscan_references(PlannerInfo *root,
 		
 
 		if (IsA(plan->subplan, ShareInputScan) &&
+			cteplaninfo &&
 			(cteplaninfo->attr_map != NULL))
 		{
 			/* after fix_scan_list, the vano could be changed to subquery, we need to adjust the columns for explain */
