@@ -229,11 +229,29 @@ jobs:
             "include": [
               {"test":"ic-good-opt-off",
                "make_configs":["src/test/regress:installcheck-good"],
-               "pg_settings":{"optimizer":"off"}
+               "pg_settings":{
+                 "optimizer":"off",
+                 "cbdb_inner_join_selectivity_damping_factor":"1",
+                 "cbdb_streaming_damping_factor":"1",
+                 "cbdb_eager_subplan":"off",
+                 "cbdb_dedup_semi_damping_factor":"1",
+                 "cbdb_enable_multi_window_agg":"off",
+                 "cbdb_enable_setop_pre_dedup":"off",
+                 "cbdb_enable_dynamic_shared_scan":"off"
+                }
               },
               {"test":"ic-good-opt-on",
                "make_configs":["src/test/regress:installcheck-good"],
-               "pg_settings":{"optimizer":"on"}
+               "pg_settings":{
+                 "optimizer":"on",
+                 "cbdb_inner_join_selectivity_damping_factor":"1",
+                 "cbdb_streaming_damping_factor":"1",
+                 "cbdb_eager_subplan":"off",
+                 "cbdb_dedup_semi_damping_factor":"1",
+                 "cbdb_enable_multi_window_agg":"off",
+                 "cbdb_enable_setop_pre_dedup":"off",
+                 "cbdb_enable_dynamic_shared_scan":"off"
+                }
               },
               {"test":"pax-ic-good-opt-off",
                "make_configs":[
@@ -242,7 +260,15 @@ jobs:
               ],
                "pg_settings":{
                  "optimizer":"off",
-                 "default_table_access_method":"pax"
+                 "default_table_access_method":"pax",
+                 "cbdb_inner_join_selectivity_damping_factor":"1",
+                 "cbdb_streaming_damping_factor":"1",
+                 "cbdb_eager_subplan":"off",
+                 "cbdb_dedup_semi_damping_factor":"1",
+                 "cbdb_enable_multi_window_agg":"off",
+                 "cbdb_enable_setop_pre_dedup":"off",
+                 "cbdb_enable_dynamic_shared_scan":"off",
+                 "force_parallel_mode":"1"
                 }
               },
               {"test":"pax-ic-good-opt-on",
@@ -252,14 +278,28 @@ jobs:
               ],
                "pg_settings":{
                  "optimizer":"on",
-                 "default_table_access_method":"pax"
+                 "default_table_access_method":"pax",
+                 "cbdb_inner_join_selectivity_damping_factor":"1",
+                 "cbdb_streaming_damping_factor":"1",
+                 "cbdb_eager_subplan":"off",
+                 "cbdb_dedup_semi_damping_factor":"1",
+                 "cbdb_enable_multi_window_agg":"off",
+                 "cbdb_enable_setop_pre_dedup":"off",
+                 "cbdb_enable_dynamic_shared_scan":"off"
                 }
               },
               {"test":"pax-ic-isolation2-opt-off",
                "make_configs":["contrib/pax_storage/:isolation2_test"],
                "pg_settings":{
                  "optimizer":"off",
-                 "default_table_access_method":"pax"
+                 "default_table_access_method":"pax",
+                 "cbdb_inner_join_selectivity_damping_factor":"1",
+                 "cbdb_streaming_damping_factor":"1",
+                 "cbdb_eager_subplan":"off",
+                 "cbdb_dedup_semi_damping_factor":"1",
+                 "cbdb_enable_multi_window_agg":"off",
+                 "cbdb_enable_setop_pre_dedup":"off",
+                 "cbdb_enable_dynamic_shared_scan":"off"
                 },
                 "enable_core_check":false
               },
@@ -267,7 +307,14 @@ jobs:
                "make_configs":["contrib/pax_storage/:isolation2_test"],
                "pg_settings":{
                  "optimizer":"on",
-                 "default_table_access_method":"pax"
+                 "default_table_access_method":"pax",
+                 "cbdb_inner_join_selectivity_damping_factor":"1",
+                 "cbdb_streaming_damping_factor":"1",
+                 "cbdb_eager_subplan":"off",
+                 "cbdb_dedup_semi_damping_factor":"1",
+                 "cbdb_enable_multi_window_agg":"off",
+                 "cbdb_enable_setop_pre_dedup":"off",
+                 "cbdb_enable_dynamic_shared_scan":"off"
                 },
                 "enable_core_check":false
               },
