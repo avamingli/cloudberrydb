@@ -5384,7 +5384,7 @@ create_nestloop_plan(PlannerInfo *root,
 
 	if (join_plan->join.prefetch_inner)
 	{
-		/* We have to execute ourer first if outer has producer and inner has a consumer. */
+		/* We have to execute outer first if outer has producer and inner has a consumer. */
 		if ((outer_sisc_role & (SISC_PRODUCER)) &&
 			((inner_sisc_role & SISC_PRODUCER) == 0) &&
 			(inner_sisc_role & (SISC_CONSUMER)))
@@ -5790,7 +5790,7 @@ create_mergejoin_plan(PlannerInfo *root,
 
 	if (join_plan->join.prefetch_inner)
 	{
-		/* We have to execute ourer first if outer has producer and inner has a consumer. */
+		/* We have to execute outer first if outer has producer and inner has a consumer. */
 		if ((outer_sisc_role & (SISC_PRODUCER)) &&
 			((inner_sisc_role & SISC_PRODUCER) == 0) &&
 			(inner_sisc_role & (SISC_CONSUMER)))
@@ -6107,7 +6107,7 @@ create_hashjoin_plan(PlannerInfo *root,
 
 	if (join_plan->join.prefetch_inner)
 	{
-		/* We have to execute ourer first if outer has producer and inner has a consumer. */
+		/* We have to execute outer first if outer has producer and inner has a consumer. */
 		if ((outer_sisc_role & (SISC_PRODUCER)) &&
 			((inner_sisc_role & SISC_PRODUCER) == 0) &&
 			(inner_sisc_role & (SISC_CONSUMER)))
@@ -6149,7 +6149,7 @@ create_hashjoin_plan(PlannerInfo *root,
 	int qual_sisc_role = contain_ShareInputScan_detail(root, (Node*) join_plan->join.plan.qual);
 
 	if ((outer_sisc_role & (SISC_PRODUCER)) && 
-		(qual_sisc_role& (SISC_CONSUMER)))
+		(qual_sisc_role & (SISC_CONSUMER)))
 		join_plan->join.prefetch_qual = false;
 
 	copy_generic_path_info(&join_plan->join.plan, &best_path->jpath.path);

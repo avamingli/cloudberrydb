@@ -768,7 +768,7 @@ shareinput_mutator_dag_to_tree(Node *node, PlannerInfo *root, bool fPop)
 
 		/*
 		 * Couldn't find a match in existing list of producers, so this is a
-		 * producer. Add this to the list of producers, ad assign a new
+		 * producer. Add this to the list of producers, and assign a new
 		 * share_id.
 		 */
 		siscan->share_id = share_id;

@@ -735,14 +735,14 @@ create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
 			}
 		}
 
-		/* Enable Prallel GroupingSets. */
+		/* Enable Parallel GroupingSets. */
 		if (ctx->groupingSets &&
 			!ctx->is_distinct &&
 			ctx->agg_costs->distinctAggrefs == NIL && 
 			input_rel->partial_pathlist)
 		{
 			/*
-			 * GroungpingSets could not be partial aggregated. 
+			 * GroupingSets could not be partial aggregated.
 			 * But in MPP, it still have a chance to be parallel if 
 			 * using input_rel's partial paths.
 			 */
@@ -754,7 +754,7 @@ create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
 				if (cdbpathlocus_collocates_tlist(root, path->locus, ctx->group_tles))
 					continue;
 
-				/* Don't check loucs as parallel might be winner. */
+				/* Don't check locus as parallel might be winner. */
 				is_sorted = pathkeys_contained_in(ctx->partial_needed_pathkeys,
 													path->pathkeys);
 				if (path == input_rel_cheapest_partial_path || is_sorted)
@@ -799,7 +799,7 @@ create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
 		 * For GroupBy, if there were partially aggregated paths, add it to first stage.
 		 * Erase output_rel's partial paths, eager cbdb multiphase.
 		 *
-		 * FIXME: Could it happpen that the loucs is already distributed by Group BY columns? 
+		 * FIXME: Could it happpen that the locus is already distributed by Group BY columns? 
 		 * Anyway, use orinal path if it was.
 		 */
 		if (!cdbpathlocus_collocates_tlist(root, cheapest_partial_path->locus, ctx->group_tles))
@@ -2895,9 +2895,13 @@ static void add_first_stage_group_agg_partial_path(PlannerInfo *root,
 }
 
 /*
- * Do a pre window agg if upper tells us there were a window filter
- * We don't need to motion data acoocrding to the locus as
- * it will be processed later in final window agg. 
+ * cdb_create_pre_window_agg_path - Create a path with pre-filtered window aggregation
+ *
+ * This function creates a path that computes a window function (rank/dense_rank)
+ * and applies a filter (e.g., rank <= N) before the main window aggregation.
+ * This optimization reduces the number of rows processed by subsequent operations.
+ *
+ * Returns: A path with WindowAgg -> Result(filter) structure
  */
 Path *
 cdb_create_pre_window_agg_path(PlannerInfo *root,
@@ -2911,7 +2915,7 @@ cdb_create_pre_window_agg_path(PlannerInfo *root,
 								List *window_functions,
 								WindowClause *wc)
 {
-	bool	use_incremental_sort =  (presorted_keys != 0 && enable_incremental_sort);
+	bool	use_incremental_sort = (presorted_keys != 0 && enable_incremental_sort);
 	PathTarget *orig_pathtarget;
 	
 	if(!is_sorted && group_pathkeys)
@@ -2939,7 +2943,8 @@ cdb_create_pre_window_agg_path(PlannerInfo *root,
 	 * is no window filter.
 	 *
 	 * ->  Result
-	 *	 Output: tenk1.ten, tenk1.four                                                                                                       Filter: ((rank() OVER (?)) < 3)
+	 *	 Output: tenk1.ten, tenk1.four
+	 *	 Filter: ((rank() OVER (?)) < 3)
 	 *	 ->  WindowAgg
 	 *		   Output: rank() OVER (?), tenk1.ten, tenk1.four
 	 *		   Partition By: tenk1.four
