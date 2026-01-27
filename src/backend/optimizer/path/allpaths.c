@@ -2949,7 +2949,6 @@ subquery_push_qual_1(Query *subquery, Relids relids, Node *qual)
 		if (subquery->hasAggs || subquery->groupClause || subquery->groupingSets || subquery->havingQual)
 		{
 			subquery->havingQual = (Node *) make_and_qual(subquery->havingQual, qual);
-			//subquery->havingQual = (Node *) canonicalize_qual((Expr*)subquery->havingQual, false);
 		}
 		else
 			subquery->jointree->quals = make_and_qual(subquery->jointree->quals, qual);
@@ -3169,7 +3168,6 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		 * Having multiple SharedScans can lead to deadlocks. For now,
 		 * disallow sharing of ctes at lower levels.
 		 */
-		//config->gp_cte_sharing = false;
 
 		config->honor_order_by = false;
 
@@ -3625,7 +3623,7 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 										  required_outer);
 
 			cte_path->barrierHazard = subpath->barrierHazard;
-			cte_path->barrierHazard = subpath->motionHazard;
+			cte_path->motionHazard = subpath->motionHazard;
 			add_partial_path(rel, cte_path);
 		}
 	}
@@ -4549,6 +4547,12 @@ set_subquery_window_filter (PlannerInfo *root, RelOptInfo *rel,
 	return;
 }
 
+/*
+ * collect_cte_quals - Collect pushdown-safe quals from CTE references
+ *
+ * Returns a list of qual expressions that can be safely pushed down
+ * into the CTE subquery.
+ */
 static List *
 collect_cte_quals(PlannerInfo *root, RelOptInfo *rel,
 				   RangeTblEntry *rte, Index rti, Query *subquery)
@@ -5132,8 +5136,6 @@ remove_cte_unused_subquery_outputs(CtePlanInfo * cteplaninfo)
 	int new_resno = 1;
 
 	attrMap = make_attrmap(list_length(subquery->targetList));
-
-	// TODO: remove subquery output
 
  	foreach(lc, subquery->targetList)
  	{
