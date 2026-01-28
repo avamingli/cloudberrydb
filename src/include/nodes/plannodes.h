@@ -1251,7 +1251,7 @@ typedef struct ShareInputScan
 	/* Could be set reference? */
 	bool		ref_set;
 
-	/* Ubderlying cte name. */
+	/* Underlying cte name. */
 	char* 		ctename;
 	
 	CtePlanInfo* 		cteplaninfo;

@@ -1748,9 +1748,9 @@ set_subqueryscan_references(PlannerInfo *root,
 					continue;
 
 				/*
-				 * We must eliminate tlist that are no used by makeing nulls like UPSTREAM.
+				 * We must eliminate tlist that are not used by making nulls like UPSTREAM.
 				 * But don't correct varattno here as the var could be inside expression
-				 * recursivily, do it in change_varattnos_of_ShareInputScan().
+				 * recursively, do it in change_varattnos_of_ShareInputScan().
 				 */
 				if (var->varattno == 0)
 				{

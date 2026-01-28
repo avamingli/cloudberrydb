@@ -3725,7 +3725,7 @@ is_single_simple_query(PlannerInfo *root)
 
 	/* Don't touch writable operations. */
 	if (parse->commandType != CMD_SELECT)
-		return  true;
+		return true;
 
 	if (parse->hasAggs ||
 		parse->groupClause != NIL ||
