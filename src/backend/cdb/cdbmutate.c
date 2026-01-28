@@ -693,6 +693,25 @@ shareinput_save_producer(ShareInputScan *plan, ApplyShareInputContext *ctxt, boo
  * Also, a share_id is assigned to each ShareInputScan node, as well as the
  * Material/Sort nodes below the producers. The producers and its consumers
  * are linked together by the same share_id.
+ *
+ * Producer Relocation from SubPlan to Main Plan
+ * ---------------------------------------------
+ * When processing subplans (InitPlans), a ShareInputScan may initially become
+ * a producer. However, if the same CTE is also referenced in the main plan,
+ * we prefer to have the producer in the main plan rather than in an InitPlan.
+ * This is controlled by the global flag 'apply_shareinput_dag_to_tree_from_subplan':
+ *
+ * - When processing subplans, this flag is set to true, and any ShareInputScan
+ *   encountered first becomes a tentative producer (marked with producer_from_subplan).
+ *
+ * - When processing the main plan (flag is false), if we find a ShareInputScan
+ *   that matches a producer previously set from a subplan, we relocate the
+ *   producer role to the main plan. The previous producer (in subplan) becomes
+ *   a consumer instead.
+ *
+ * This relocation ensures that the shared scan producer executes in the main
+ * plan context, which provides better execution coordination and avoids issues
+ * with InitPlan execution ordering.
  */
 static bool
 shareinput_mutator_dag_to_tree(Node *node, PlannerInfo *root, bool fPop)
@@ -724,13 +743,24 @@ shareinput_mutator_dag_to_tree(Node *node, PlannerInfo *root, bool fPop)
 				if (ctxt->producer_from_subplan[share_id] && !apply_shareinput_dag_to_tree_from_subplan)
 				{
 					/*
-					 * If producer is from a subplan, do a second check if we could make it
-					 * to main plan.
+					 * Producer relocation: The existing producer was set from a subplan
+					 * (InitPlan), but we're now processing the main plan and found another
+					 * reference to the same CTE. Relocate the producer role to this
+					 * ShareInputScan in the main plan.
+					 *
+					 * Steps:
+					 * 1. Convert the previous producer (in subplan) to a consumer by
+					 *    removing its subtree.
+					 * 2. Make this ShareInputScan the new producer by keeping its subtree
+					 *    and updating the context.
+					 *
+					 * This ensures the shared scan materializes data in the main plan
+					 * execution context rather than in an InitPlan.
 					 */
-					ShareInputScan *pre_producer = ctxt->producer_parent_plans[share_id];	
+					ShareInputScan *pre_producer = ctxt->producer_parent_plans[share_id];
 					pre_producer->scan.plan.lefttree = NULL;
 
-					/* replace new producer. */
+					/* This ShareInputScan becomes the new producer. */
 					siscan->share_id = share_id;
 					ctxt->shared_plans[share_id] = siscan->scan.plan.lefttree;
 					ctxt->producer_from_subplan[share_id] = false;
