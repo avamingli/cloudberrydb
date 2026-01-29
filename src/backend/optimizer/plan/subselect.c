@@ -582,9 +582,48 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 
 	if (subroot->is_shared_scan)
 		eager_subplan = true;
-	else if (plan->locustype == CdbLocusType_Entry)
-		/* Don't eager subplan if we are already on QD, else a broadcast under SubPlan will cause inactive Motion. */
+	else if (plan->locustype == CdbLocusType_Entry && plan->initPlan != NIL)
+	{
+		/*
+		 * Don't eager subplan if we are already on QD,
+		 * else a broadcast under SubPlan will cause inactive Motion.
+		 *
+		 * select a from test_index_with_orderby_limit order by a limit (
+		 * 		select min(a) from test_index_with_orderby_limit);
+		 *
+		 *  Limit
+		 *    Locus: Entry
+		 *    ->  Gather Motion 32:1  (slice1; segments: 32)
+		 * 		 Locus: Entry
+		 * 		 Merge Key: test_index_with_orderby_limit.a
+		 * 		 ->  Limit
+		 * 			   Locus: Hashed
+		 * 			   ->  Index Only Scan using index_ab on test_index_with_orderby_limit
+		 * 					 Locus: Hashed
+		 * 			   SubPlan 2
+		 * 				 ->  Materialize
+		 * 					   Locus: Replicated
+		 * 					   ->  Broadcast Motion 1:32  (slice2)
+		 * 							 Locus: Replicated
+		 * 							 InitPlan 1 (returns $0)  (slice3)
+		 * 							   ->  Limit
+		 * 									 Locus: Entry
+		 * 									 ->  Gather Motion 32:1  (slice4; segments: 32)
+		 * 										   Locus: Entry
+		 * 										   Merge Key: test_index_with_orderby_limit_1.a
+		 *                                         ->  Index Only Scan using index_ab on test_index_with_orderby_limit test_index_with_orderby_limit_1
+		 * 												 Locus: Hashed
+		 * 												 Index Cond: (a IS NOT NULL)
+		 * 							 ->  Result
+		 * 								   Locus: Entry
+		 * 
+		 * When SubPlan executes before the main plan, its nested InitPlan slice completes
+		 * and attempts to broadcast data to parent operators.
+		 * However, the main plan hasn't yet initialized the SubPlan execution context
+		 * to receive this data, causing the Motion error.
+		 */
 		eager_subplan = false;
+	}
 	else if (cbdb_eager_subplan && !is_single_simple_query(subroot))
 		eager_subplan = true;
 
