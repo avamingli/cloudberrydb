@@ -84,7 +84,9 @@ static Node *build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 						   List *plan_params,
 						   SubLinkType subLinkType, int subLinkId,
 						   Node *testexpr, List *testexpr_paramids,
-						   bool unknownEqFalse);
+						   bool unknownEqFalse,
+						   bool outer_has_rte_function);
+static bool outer_query_has_rte_function(PlannerInfo *root);
 static List *generate_subquery_params(PlannerInfo *root, List *tlist,
 									  List **paramIds);
 static Node *convert_testexpr_mutator(Node *node,
@@ -481,10 +483,19 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 	/* if we are a shared scan */
 	subroot->is_shared_scan = contain_ShareInputScan(subroot, (Node*) plan);
 
+	/*
+	 * Detect whether the outer query has an RTE_FUNCTION.  If so,
+	 * build_subplan will avoid the eager SubPlan conversion because
+	 * the resulting SubPlan would live in the same multi-segment
+	 * slice as the FunctionScan.  See outer_query_has_rte_function().
+	 */
+	bool		has_rte_function = outer_query_has_rte_function(root);
+
 	/* And convert to SubPlan or InitPlan format. */
 	result = build_subplan(root, plan, subroot, plan_params,
 						   subLinkType, subLinkId,
-						   testexpr, NIL, isTopQual);
+						   testexpr, NIL, isTopQual,
+						   has_rte_function);
 
 	/*
 	 * If it's a correlated EXISTS with an unimportant targetlist, we might be
@@ -543,7 +554,8 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 												  ANY_SUBLINK, 0,
 												  newtestexpr,
 												  paramIds,
-												  true));
+												  true,
+												  has_rte_function));
 				/* Check we got what we expected */
 				Assert(hashplan->parParam == NIL);
 				Assert(hashplan->useHashTable);
@@ -561,6 +573,53 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 }
 
 /*
+ * Return true if the outer query's range table contains any RTE_FUNCTION.
+ *
+ * A FunctionScan corresponding to an RTE_FUNCTION typically executes on
+ * every segment (especially SETOF / VOLATILE functions).  When that is
+ * the case, any SubPlan that cbdb_eager_subplan would create for a
+ * SubLink in the same query level ends up embedded in the same
+ * multi-segment slice as the FunctionScan.  The SubPlan's Entry-locus
+ * Gather Motion then fails at execution time either with
+ *   "unexpected gang size: N"
+ * or, when a PL-language SRF tries SPI from inside a QE,
+ *   "query plan with multiple segworker groups is not supported".
+ *
+ * Two example shapes that both hit this:
+ *
+ *   (1) SubLink as an argument to a function in FROM:
+ *       SELECT ... FROM t, generate_series(0, (SELECT max(x) FROM y)) g ...
+ *
+ *   (2) SubLink as a sibling of a FunctionScan in the target list:
+ *       SELECT n - (SELECT count(*) FROM t)
+ *       FROM srf($$...$$) AS n;
+ *
+ * In both shapes the surrounding slice is multi-segment, so we fall
+ * back to keeping the SubLink as an InitPlan: it is executed on the QD
+ * and its scalar result is dispatched to QEs via execParams.  This
+ * over-approximates -- some RTE_FUNCTIONs would run on the QD only and
+ * could safely be eager -- but the cost of missing the optimization is
+ * low, while the executor errors it prevents are hard failures.
+ */
+static bool
+outer_query_has_rte_function(PlannerInfo *root)
+{
+	ListCell   *lc;
+
+	if (root->parse == NULL)
+		return false;
+
+	foreach(lc, root->parse->rtable)
+	{
+		RangeTblEntry *rte = lfirst_node(RangeTblEntry, lc);
+
+		if (rte->rtekind == RTE_FUNCTION)
+			return true;
+	}
+	return false;
+}
+
+/*
  * Build a SubPlan node given the raw inputs --- subroutine for make_subplan
  *
  * Returns either the SubPlan, or a replacement expression if we decide to
@@ -571,7 +630,8 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 			  List *plan_params,
 			  SubLinkType subLinkType, int subLinkId,
 			  Node *testexpr, List *testexpr_paramids,
-			  bool unknownEqFalse)
+			  bool unknownEqFalse,
+			  bool outer_has_rte_function)
 {
 	Node	   *result;
 	SubPlan    *splan;
@@ -626,6 +686,19 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 	}
 	else if (cbdb_eager_subplan && !is_single_simple_query(subroot))
 		eager_subplan = true;
+
+	/*
+	 * If the outer query contains any RTE_FUNCTION, its FunctionScan
+	 * node usually runs on every segment and its slice is therefore
+	 * multi-segment.  Any SubPlan created for a SubLink at this query
+	 * level is embedded in that multi-segment slice, and an Entry-locus
+	 * Gather Motion inside the SubPlan fails at execution time (see
+	 * outer_query_has_rte_function()).  Fall back to InitPlan in that
+	 * case: it is computed once on the QD and its scalar result is
+	 * dispatched to the QEs via execParams.
+	 */
+	if (outer_has_rte_function)
+		eager_subplan = false;
 
 	/*
 	 * Don't use subpan if there is modify operation, citd might be wrong.
