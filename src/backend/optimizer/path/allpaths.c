@@ -3446,14 +3446,6 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 
 				if (sub_total_rows == 0)
 					sub_total_rows = 1;
-				/*  Mark rel with estimated output rows, width for producer only. */
-				set_cte_size_estimates(root, rel, sub_total_rows);
-
-				locus = cdbpathlocus_from_subquery(root, rel, best_path);
-
-				/* Convert subquery pathkeys to outer representation */
-				pathkeys = convert_subquery_pathkeys(root, rel, best_path->pathkeys,
-														 make_tlist_from_pathtarget(best_path->pathtarget));
 
 				foreach (lc, cteplaninfo->rels)
 				{
@@ -3466,6 +3458,32 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 						set_dummy_rel_pathlist(root, cte_rel);
 						continue;
 					}
+
+					/*
+					 * Set size estimates per consumer, respecting RTE type.
+					 * CTE consumers that appear as RTE_SUBQUERY (e.g. inside
+					 * a subquery wrapper) need set_subquery_size_estimates.
+					 */
+					RangeTblEntry *cte_rte = planner_rt_fetch(cte_rel->relid, root);
+					if (cte_rte->rtekind == RTE_CTE)
+						set_cte_size_estimates(root, cte_rel, sub_total_rows);
+					else if (cte_rte->rtekind == RTE_SUBQUERY)
+						set_subquery_size_estimates(root, cte_rel);
+					else
+						Assert(false);
+
+					/*
+					 * Compute locus and pathkeys per consumer rel so that
+					 * distribution key Vars reference each consumer's own
+					 * relid.  Sharing a single producer-based locus caused
+					 * the planner to treat different CTE references as
+					 * co-located, skipping necessary Redistribute Motions
+					 * (e.g. TPC-DS Q75 self-join on a subset of GROUP BY
+					 * keys).
+					 */
+					locus = cdbpathlocus_from_subquery(root, cte_rel, best_path);
+					pathkeys = convert_subquery_pathkeys(root, cte_rel, best_path->pathkeys,
+														 make_tlist_from_pathtarget(best_path->pathtarget));
 
 					cte_rel->subroot = subroot;
 
