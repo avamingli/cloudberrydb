@@ -1282,6 +1282,21 @@ add_first_stage_hash_agg_path(PlannerInfo *root,
 	dNumGroups = estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
 												path->rows, path->locus);
 
+	/*
+	 * When the estimated per-segment groups exceed half the per-segment input
+	 * rows, the cardinality estimate is likely unreliable (e.g., from default
+	 * statistics on UNION ALL subquery columns that lack pg_statistic data).
+	 *
+	 * In MPP systems, choosing a 1-phase plan (redistribute all raw rows,
+	 * then aggregate) over a 2-phase plan (local partial aggregate, then
+	 * redistribute fewer rows) is very costly when the estimate is wrong.
+	 * The streaming hash aggregate can efficiently discover the true group
+	 * count at runtime, so we optimistically reduce the estimate to give
+	 * the 2-phase plan a fair chance in cost comparison.
+	 */
+	if (gp_use_streaming_hashagg && dNumGroups > path->rows * 0.5)
+		dNumGroups = clamp_row_est(path->rows * 0.1);
+
 	if (path->parallel_workers > 1)
 	{
 		dNumGroups /= path->parallel_workers;

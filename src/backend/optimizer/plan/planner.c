@@ -8154,17 +8154,32 @@ create_partial_grouping_paths(PlannerInfo *root,
 
 	/* Estimate number of partial groups. */
 	if (cheapest_total_path != NULL)
+	{
 		dNumPartialGroups =
-			get_number_of_groups(root,
-								 cheapest_total_path->rows,
-								 gd,
-								 extra->targetList);
+			get_number_of_groups(root, cheapest_total_path->rows,
+								gd, extra->targetList);
+
+		/*
+		 * When estimated groups exceed half the input rows, the cardinality
+		 * estimate is likely unreliable (e.g., from default statistics on
+		 * UNION ALL subquery columns). Cap at 10% of input rows to give
+		 * 2-phase aggregation a fair chance in cost comparison.
+		 */
+		if (gp_use_streaming_hashagg &&
+			dNumPartialGroups > cheapest_total_path->rows * 0.5)
+			dNumPartialGroups = clamp_row_est(cheapest_total_path->rows * 0.1);
+	}
 	if (cheapest_partial_path != NULL)
+	{
 		dNumPartialPartialGroups =
-			get_number_of_groups(root,
-								 cheapest_partial_path->rows,
-								 gd,
-								 extra->targetList);
+			get_number_of_groups(root, cheapest_partial_path->rows,
+								gd, extra->targetList);
+
+		if (gp_use_streaming_hashagg &&
+			dNumPartialPartialGroups > cheapest_partial_path->rows * 0.5)
+			dNumPartialPartialGroups =
+				clamp_row_est(cheapest_partial_path->rows * 0.1);
+	}
 
 	if (can_sort && cheapest_total_path != NULL)
 	{
