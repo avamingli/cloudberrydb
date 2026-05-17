@@ -796,13 +796,53 @@ create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
 		cheapest_partial_path)
 	{
 		/*
-		 * For GroupBy, if there were partially aggregated paths, add it to first stage.
-		 * Erase output_rel's partial paths, eager cbdb multiphase.
+		 * For GroupBy, if there were partially aggregated paths, add it to
+		 * first stage.  Erase output_rel's partial paths, eager cbdb
+		 * multiphase.
 		 *
-		 * FIXME: Could it happpen that the locus is already distributed by Group BY columns? 
-		 * Anyway, use orinal path if it was.
+		 * However, skip forcing multiphase in two cases:
+		 *
+		 * 1. When the non-parallel cheapest path is already collocated by
+		 *    GROUP BY columns.  In parallel mode, partial paths have Strewn
+		 *    locus (not collocated), but within each segment the data
+		 *    retains its hash distribution.  Forcing 2-phase is wasteful
+		 *    when 1-phase aggregation can run locally per segment.
+		 *
+		 * 2. When the GROUP BY cardinality is high relative to input rows.
+		 *    In parallel mode with Strewn locus, each worker encounters
+		 *    most of the per-segment groups.  When there are many groups
+		 *    (>100K) and they exceed 10% of per-worker input rows, partial
+		 *    aggregation barely reduces row count and the hash table is
+		 *    likely to exceed work_mem, causing streaming spills that
+		 *    produce far more output rows than the group count.  A 1-phase
+		 *    plan (redistribute raw rows, then aggregate on collocated
+		 *    data) is more efficient in this scenario.  The absolute floor
+		 *    of 100K groups avoids affecting small queries where either
+		 *    plan performs equally well.
 		 */
-		if (!cdbpathlocus_collocates_tlist(root, cheapest_partial_path->locus, ctx->group_tles))
+		bool		force_twophase = true;
+
+		/* Case 1: data already collocated by GROUP BY columns */
+		if (cdbpathlocus_collocates_tlist(root, cheapest_partial_path->locus,
+										  ctx->group_tles) ||
+			cdbpathlocus_collocates_tlist(root, cheapest_path->locus,
+										  ctx->group_tles))
+			force_twophase = false;
+
+		/* Case 2: high cardinality GROUP BY */
+		if (force_twophase)
+		{
+			double	dNumGroups;
+
+			dNumGroups = estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
+														cheapest_partial_path->rows,
+														cheapest_partial_path->locus);
+			if (dNumGroups > 100000 &&
+				dNumGroups > cheapest_partial_path->rows * 0.1)
+				force_twophase = false;
+		}
+
+		if (force_twophase)
 		{
 			output_rel->partial_pathlist = NIL;
 			add_partial_path(ctx->partial_rel, cheapest_partial_path);
