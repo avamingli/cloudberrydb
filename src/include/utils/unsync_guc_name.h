@@ -36,6 +36,7 @@
 		"block_size",
 		"bonjour",
 		"bonjour_name",
+		"cbdb_2phase_agg_cardinality_cap",
 		"cbdb_dedup_semi_damping_factor",
 		"cbdb_eager_subplan",
 		"cbdb_enable_dynamic_shared_scan",

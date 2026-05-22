@@ -237,7 +237,8 @@ jobs:
                  "cbdb_dedup_semi_damping_factor":"1",
                  "cbdb_enable_multi_window_agg":"off",
                  "cbdb_enable_setop_pre_dedup":"off",
-                 "cbdb_enable_dynamic_shared_scan":"off"
+                 "cbdb_enable_dynamic_shared_scan":"off",
+                 "cbdb_2phase_agg_cardinality_cap":"1"
                 }
               },
               {"test":"ic-good-opt-on",
@@ -250,7 +251,8 @@ jobs:
                  "cbdb_dedup_semi_damping_factor":"1",
                  "cbdb_enable_multi_window_agg":"off",
                  "cbdb_enable_setop_pre_dedup":"off",
-                 "cbdb_enable_dynamic_shared_scan":"off"
+                 "cbdb_enable_dynamic_shared_scan":"off",
+                 "cbdb_2phase_agg_cardinality_cap":"1"
                 }
               },
               {"test":"pax-ic-good-opt-off",
@@ -268,6 +270,7 @@ jobs:
                  "cbdb_enable_multi_window_agg":"off",
                  "cbdb_enable_setop_pre_dedup":"off",
                  "cbdb_enable_dynamic_shared_scan":"off",
+                 "cbdb_2phase_agg_cardinality_cap":"1",
                  "force_parallel_mode":"1"
                 }
               },
@@ -285,7 +288,8 @@ jobs:
                  "cbdb_dedup_semi_damping_factor":"1",
                  "cbdb_enable_multi_window_agg":"off",
                  "cbdb_enable_setop_pre_dedup":"off",
-                 "cbdb_enable_dynamic_shared_scan":"off"
+                 "cbdb_enable_dynamic_shared_scan":"off",
+                 "cbdb_2phase_agg_cardinality_cap":"1"
                 }
               },
               {"test":"pax-ic-isolation2-opt-off",
@@ -299,7 +303,8 @@ jobs:
                  "cbdb_dedup_semi_damping_factor":"1",
                  "cbdb_enable_multi_window_agg":"off",
                  "cbdb_enable_setop_pre_dedup":"off",
-                 "cbdb_enable_dynamic_shared_scan":"off"
+                 "cbdb_enable_dynamic_shared_scan":"off",
+                 "cbdb_2phase_agg_cardinality_cap":"1"
                 },
                 "enable_core_check":false
               },
@@ -314,7 +319,8 @@ jobs:
                  "cbdb_dedup_semi_damping_factor":"1",
                  "cbdb_enable_multi_window_agg":"off",
                  "cbdb_enable_setop_pre_dedup":"off",
-                 "cbdb_enable_dynamic_shared_scan":"off"
+                 "cbdb_enable_dynamic_shared_scan":"off",
+                 "cbdb_2phase_agg_cardinality_cap":"1"
                 },
                 "enable_core_check":false
               },

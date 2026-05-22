@@ -146,16 +146,16 @@ SELECT depname, empno, salary, rank() OVER (PARTITION BY depname ORDER BY salary
 SELECT depname, empno, salary, rank() OVER (PARTITION BY depname ORDER BY salary) FROM empsalary;
   depname  | empno | salary | rank 
 -----------+-------+--------+------
- personnel |     5 |   3500 |    1
- personnel |     2 |   3900 |    2
- sales     |     4 |   4800 |    1
- sales     |     3 |   4800 |    1
- sales     |     1 |   5000 |    3
  develop   |     7 |   4200 |    1
  develop   |     9 |   4500 |    2
  develop   |    10 |   5200 |    3
  develop   |    11 |   5200 |    3
  develop   |     8 |   6000 |    5
+ personnel |     5 |   3500 |    1
+ personnel |     2 |   3900 |    2
+ sales     |     4 |   4800 |    1
+ sales     |     3 |   4800 |    1
+ sales     |     1 |   5000 |    3
 (10 rows)
 
 -- w3
@@ -208,16 +208,16 @@ SELECT depname, empno, salary, sum(salary) OVER w FROM empsalary WINDOW w AS (PA
 SELECT depname, empno, salary, sum(salary) OVER w FROM empsalary WINDOW w AS (PARTITION BY depname);
   depname  | empno | salary |  sum  
 -----------+-------+--------+-------
- personnel |     5 |   3500 |  7400
- personnel |     2 |   3900 |  7400
- sales     |     1 |   5000 | 14600
- sales     |     4 |   4800 | 14600
- sales     |     3 |   4800 | 14600
  develop   |    10 |   5200 | 25100
  develop   |     7 |   4200 | 25100
  develop   |     9 |   4500 | 25100
  develop   |     8 |   6000 | 25100
  develop   |    11 |   5200 | 25100
+ personnel |     5 |   3500 |  7400
+ personnel |     2 |   3900 |  7400
+ sales     |     1 |   5000 | 14600
+ sales     |     4 |   4800 | 14600
+ sales     |     3 |   4800 | 14600
 (10 rows)
 
 -- w4
@@ -332,28 +332,23 @@ SELECT sum(salary),
 	row_number() OVER (ORDER BY depname),
 	sum(sum(salary)) OVER (ORDER BY depname DESC)
 FROM empsalary GROUP BY depname;
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
+                         QUERY PLAN                         
+------------------------------------------------------------
  WindowAgg
    Order By: depname
    ->  Sort
          Sort Key: depname
          ->  WindowAgg
                Order By: depname
-               ->  Gather Motion 6:1  (slice1; segments: 6)
+               ->  Gather Motion 3:1  (slice1; segments: 3)
                      Merge Key: depname
                      ->  Sort
                            Sort Key: depname DESC
-                           ->  Finalize HashAggregate
+                           ->  HashAggregate
                                  Group Key: depname
-                                 ->  Redistribute Motion 6:6  (slice2; segments: 6)
-                                       Hash Key: depname
-                                       Hash Module: 3
-                                       ->  Streaming Partial HashAggregate
-                                             Group Key: depname
-                                             ->  Parallel Seq Scan on empsalary
+                                 ->  Seq Scan on empsalary
  Optimizer: Postgres query optimizer
-(19 rows)
+(14 rows)
 
 SELECT sum(salary),
 	row_number() OVER (ORDER BY depname),
@@ -490,16 +485,16 @@ SELECT sum(salary) OVER w, rank() OVER w FROM empsalary WINDOW w AS (PARTITION B
 SELECT sum(salary) OVER w, rank() OVER w FROM empsalary WINDOW w AS (PARTITION BY depname ORDER BY salary DESC);
   sum  | rank 
 -------+------
-  6000 |    1
- 16400 |    2
- 16400 |    2
- 20900 |    4
- 25100 |    5
   3900 |    1
   7400 |    2
   5000 |    1
  14600 |    2
  14600 |    2
+  6000 |    1
+ 16400 |    2
+ 16400 |    2
+ 20900 |    4
+ 25100 |    5
 (10 rows)
 
 -- w8

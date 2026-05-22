@@ -1334,7 +1334,9 @@ add_first_stage_hash_agg_path(PlannerInfo *root,
 	 * count at runtime, so we optimistically reduce the estimate to give
 	 * the 2-phase plan a fair chance in cost comparison.
 	 */
-	if (gp_use_streaming_hashagg && dNumGroups > path->rows * 0.5)
+	if (gp_use_streaming_hashagg &&
+		cbdb_2phase_agg_cardinality_cap < 1.0 &&
+		dNumGroups > path->rows * cbdb_2phase_agg_cardinality_cap)
 		dNumGroups = clamp_row_est(path->rows * 0.1);
 
 	if (path->parallel_workers > 1)

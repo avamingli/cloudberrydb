@@ -1185,6 +1185,13 @@ select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
 ----+----+----+----+----+----
   1 |  2 |  1 |  1 |  1 |  2
   2 |  3 |  1 |  2 |  2 |  3
+  5 |  6 |  5 |  5 |  5 |  6
+  6 |  7 |  6 |  6 |  6 |  7
+  9 | 10 |  9 |  9 |  9 | 10
+ 10 | 11 | 10 | 10 | 10 | 11
+  6 |  7 |  5 |  6 |  6 |  7
+  7 |  8 |  6 |  7 |  7 |  8
+ 10 | 11 |  9 | 10 | 10 | 11
   2 |  3 |  2 |  2 |  2 |  3
   3 |  4 |  3 |  3 |  3 |  4
   4 |  5 |  4 |  4 |  4 |  5
@@ -1195,13 +1202,6 @@ select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
   5 |  6 |  4 |  5 |  5 |  6
   8 |  9 |  7 |  8 |  8 |  9
   9 | 10 |  8 |  9 |  9 | 10
-  5 |  6 |  5 |  5 |  5 |  6
-  6 |  7 |  6 |  6 |  6 |  7
-  9 | 10 |  9 |  9 |  9 | 10
- 10 | 11 | 10 | 10 | 10 | 11
-  6 |  7 |  5 |  6 |  6 |  7
-  7 |  8 |  6 |  7 |  7 |  8
- 10 | 11 |  9 | 10 | 10 | 11
 (19 rows)
 
 -- parallel join without parallel hash
@@ -1238,25 +1238,25 @@ explain(locus, costs off) select * from rt1 join t1 on rt1.a = t1.b join rt3 on 
 select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
  a  | b  | a  | b  | a  | b  
 ----+----+----+----+----+----
+  5 |  6 |  5 |  5 |  5 |  6
+  6 |  7 |  6 |  6 |  6 |  7
+  9 | 10 |  9 |  9 |  9 | 10
+ 10 | 11 | 10 | 10 | 10 | 11
+  6 |  7 |  5 |  6 |  6 |  7
+  7 |  8 |  6 |  7 |  7 |  8
+ 10 | 11 |  9 | 10 | 10 | 11
+  1 |  2 |  1 |  1 |  1 |  2
   2 |  3 |  2 |  2 |  2 |  3
   3 |  4 |  3 |  3 |  3 |  4
   4 |  5 |  4 |  4 |  4 |  5
   7 |  8 |  7 |  7 |  7 |  8
   8 |  9 |  8 |  8 |  8 |  9
-  1 |  2 |  1 |  1 |  1 |  2
-  2 |  3 |  1 |  2 |  2 |  3
   3 |  4 |  2 |  3 |  3 |  4
   4 |  5 |  3 |  4 |  4 |  5
   5 |  6 |  4 |  5 |  5 |  6
   8 |  9 |  7 |  8 |  8 |  9
   9 | 10 |  8 |  9 |  9 | 10
-  6 |  7 |  5 |  6 |  6 |  7
-  7 |  8 |  6 |  7 |  7 |  8
- 10 | 11 |  9 | 10 | 10 | 11
-  5 |  6 |  5 |  5 |  5 |  6
-  6 |  7 |  6 |  6 |  6 |  7
-  9 | 10 |  9 |  9 |  9 | 10
- 10 | 11 | 10 | 10 | 10 | 11
+  2 |  3 |  1 |  2 |  2 |  3
 (19 rows)
 
 create table t2(a int, b int) with(parallel_workers=0);
@@ -1271,7 +1271,6 @@ set local enable_parallel = off;
 select * from rt4 join t2 using(b);
  b  | a  | a  
 ----+----+----
-  2 |  1 |  1
   6 |  5 |  5
   7 |  6 |  6
  10 |  9 |  9
@@ -1281,6 +1280,7 @@ select * from rt4 join t2 using(b);
   5 |  4 |  4
   8 |  7 |  7
   9 |  8 |  8
+  2 |  1 |  1
 (10 rows)
 
 set local enable_parallel = on;
@@ -1311,16 +1311,16 @@ explain(locus, costs off) select * from rt4 join t2 using(b);
 select * from rt4 join t2 using(b);
  b  | a  | a  
 ----+----+----
-  2 |  1 |  1
-  6 |  5 |  5
-  7 |  6 |  6
- 10 |  9 |  9
- 11 | 10 | 10
   3 |  2 |  2
   4 |  3 |  3
   5 |  4 |  4
   8 |  7 |  7
   9 |  8 |  8
+  6 |  5 |  5
+  7 |  6 |  6
+ 10 |  9 |  9
+ 11 | 10 | 10
+  2 |  1 |  1
 (10 rows)
 
 create table t3(a int, b int) with(parallel_workers=2);
@@ -1404,11 +1404,11 @@ explain(locus, costs off) select * from t_replica_workers_2 join t_random_worker
 select * from t_replica_workers_2 join t_random_workers_0 using(a);
  a | b | b 
 ---+---+---
- 4 | 5 | 5
- 2 | 3 | 3
- 5 | 6 | 6
- 1 | 2 | 2
  3 | 4 | 4
+ 1 | 2 | 2
+ 2 | 3 | 3
+ 4 | 5 | 5
+ 5 | 6 | 6
 (5 rows)
 
 -- non parallel results
@@ -1417,10 +1417,10 @@ select * from t_replica_workers_2 join t_random_workers_0 using(a);
  a | b | b 
 ---+---+---
  4 | 5 | 5
- 2 | 3 | 3
  5 | 6 | 6
- 1 | 2 | 2
  3 | 4 | 4
+ 1 | 2 | 2
+ 2 | 3 | 3
 (5 rows)
 
 abort;
@@ -1461,11 +1461,11 @@ explain(locus, costs off) select * from t_replica_workers_2 right join t_random_
 select * from t_replica_workers_2 right join t_random_workers_2 using(a);
  a | b | b 
 ---+---+---
- 4 | 5 | 5
- 5 | 6 | 6
  3 | 4 | 4
  1 | 2 | 2
+ 4 | 5 | 5
  2 | 3 | 3
+ 5 | 6 | 6
 (5 rows)
 
 -- non parallel results
@@ -1474,8 +1474,8 @@ select * from t_replica_workers_2 right join t_random_workers_2 using(a);
  a | b | b 
 ---+---+---
  1 | 2 | 2
- 2 | 3 | 3
  4 | 5 | 5
+ 2 | 3 | 3
  5 | 6 | 6
  3 | 4 | 4
 (5 rows)
@@ -1518,11 +1518,11 @@ explain(locus, costs off) select * from t_replica_workers_2 join t_random_worker
 select * from t_replica_workers_2 join t_random_workers_2 using(a);
  a | b | b 
 ---+---+---
- 4 | 5 | 5
  1 | 2 | 2
  3 | 4 | 4
- 5 | 6 | 6
+ 4 | 5 | 5
  2 | 3 | 3
+ 5 | 6 | 6
 (5 rows)
 
 -- non parallel results
@@ -1530,11 +1530,11 @@ set local enable_parallel=false;
 select * from t_replica_workers_2 join t_random_workers_2 using(a);
  a | b | b 
 ---+---+---
- 4 | 5 | 5
  1 | 2 | 2
  3 | 4 | 4
- 5 | 6 | 6
+ 4 | 5 | 5
  2 | 3 | 3
+ 5 | 6 | 6
 (5 rows)
 
 abort;
@@ -3628,8 +3628,8 @@ explain(locus, costs off) with x as
   (select a, count(*) as b from t1 group by a union all
     select a, count(*) as b from t2 group by a)
   select count(*) from x a join x b on a.a = b.b;
-                                                    QUERY PLAN                                                    
-------------------------------------------------------------------------------------------------------------------
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
  Finalize Aggregate
    Locus: Entry
    ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -3638,62 +3638,38 @@ explain(locus, costs off) with x as
                Locus: Hashed
                ->  Hash Join
                      Locus: Hashed
-                     Hash Cond: (a.a = b.b)
+                     Hash Cond: (b.b = a.a)
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)
                            Locus: Hashed
-                           Hash Key: a.a
-                           ->  Subquery Scan on a
+                           Hash Key: b.b
+                           ->  Subquery Scan on b
                                  Locus: Strewn
                                  ->  Shared Scan (share slice:id 2:0)
-                                       Locus: Strewn
+                                       Locus: Hashed
                      ->  Hash
                            Locus: Hashed
-                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                           ->  Subquery Scan on a
                                  Locus: Hashed
-                                 Hash Key: b.b
-                                 ->  Subquery Scan on b
-                                       Locus: Strewn
-                                       ->  Shared Scan (share slice:id 3:0)
-                                             Locus: Strewn
-                                             ->  Redistribute Motion 6:3  (slice4; segments: 6)
-                                                   Locus: Strewn
-                                                   ->  Append
+                                 ->  Shared Scan (share slice:id 1:0)
+                                       Locus: Hashed
+                                       ->  Redistribute Motion 6:3  (slice3; segments: 6)
+                                             Locus: Hashed
+                                             Hash Key: t2.a
+                                             ->  Parallel Append
+                                                   Locus: HashedWorkers
+                                                   Parallel Workers: 2
+                                                   ->  HashAggregate
                                                          Locus: Hashed
-                                                         Parallel Workers: 2
-                                                         ->  Finalize HashAggregate
+                                                         Group Key: t2.a
+                                                         ->  Seq Scan on t2
                                                                Locus: Hashed
-                                                               Parallel Workers: 2
-                                                               Group Key: t2.a
-                                                               ->  Redistribute Motion 6:6  (slice5; segments: 6)
-                                                                     Locus: Hashed
-                                                                     Parallel Workers: 2
-                                                                     Hash Key: t2.a
-                                                                     Hash Module: 3
-                                                                     ->  Streaming Partial HashAggregate
-                                                                           Locus: HashedWorkers
-                                                                           Parallel Workers: 2
-                                                                           Group Key: t2.a
-                                                                           ->  Parallel Seq Scan on t2
-                                                                                 Locus: HashedWorkers
-                                                                                 Parallel Workers: 2
-                                                         ->  Finalize HashAggregate
+                                                   ->  HashAggregate
+                                                         Locus: Hashed
+                                                         Group Key: t1.a
+                                                         ->  Seq Scan on t1
                                                                Locus: Hashed
-                                                               Parallel Workers: 2
-                                                               Group Key: t1.a
-                                                               ->  Redistribute Motion 6:6  (slice6; segments: 6)
-                                                                     Locus: Hashed
-                                                                     Parallel Workers: 2
-                                                                     Hash Key: t1.a
-                                                                     Hash Module: 3
-                                                                     ->  Streaming Partial HashAggregate
-                                                                           Locus: HashedWorkers
-                                                                           Parallel Workers: 2
-                                                                           Group Key: t1.a
-                                                                           ->  Parallel Seq Scan on t1
-                                                                                 Locus: HashedWorkers
-                                                                                 Parallel Workers: 2
  Optimizer: Postgres query optimizer
-(63 rows)
+(39 rows)
 
 reset gp_cte_sharing;
 reset enable_parallel;

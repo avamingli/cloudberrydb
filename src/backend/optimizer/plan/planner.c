@@ -8166,7 +8166,8 @@ create_partial_grouping_paths(PlannerInfo *root,
 		 * 2-phase aggregation a fair chance in cost comparison.
 		 */
 		if (gp_use_streaming_hashagg &&
-			dNumPartialGroups > cheapest_total_path->rows * 0.5)
+			cbdb_2phase_agg_cardinality_cap < 1.0 &&
+			dNumPartialGroups > cheapest_total_path->rows * cbdb_2phase_agg_cardinality_cap)
 			dNumPartialGroups = clamp_row_est(cheapest_total_path->rows * 0.1);
 	}
 	if (cheapest_partial_path != NULL)
@@ -8176,7 +8177,8 @@ create_partial_grouping_paths(PlannerInfo *root,
 								gd, extra->targetList);
 
 		if (gp_use_streaming_hashagg &&
-			dNumPartialPartialGroups > cheapest_partial_path->rows * 0.5)
+			cbdb_2phase_agg_cardinality_cap < 1.0 &&
+			dNumPartialPartialGroups > cheapest_partial_path->rows * cbdb_2phase_agg_cardinality_cap)
 			dNumPartialPartialGroups =
 				clamp_row_est(cheapest_partial_path->rows * 0.1);
 	}

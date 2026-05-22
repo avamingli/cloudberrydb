@@ -492,6 +492,7 @@ bool	cbdb_eager_subplan = true;
 double	cbdb_dedup_semi_damping_factor;
 bool	cbdb_enable_setop_pre_dedup;
 bool	cbdb_enable_dynamic_shared_scan;
+double	cbdb_2phase_agg_cardinality_cap;
 
 static const struct config_enum_entry gp_log_format_options[] = {
 	{"text", 0},
@@ -4952,6 +4953,19 @@ struct config_real ConfigureNamesReal_gp[] =
 		},
 		&cbdb_dedup_semi_damping_factor,
 		1.04, 1.0, DBL_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"cbdb_2phase_agg_cardinality_cap", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Cardinality ratio threshold for capping partial group estimates in 2-phase aggregation."),
+			gettext_noop("When estimated groups exceed this fraction of input rows, "
+						 "cap partial group count at 10% to favor 2-phase aggregation. "
+						 "Set to 1.0 to disable the cap."),
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
+		},
+		&cbdb_2phase_agg_cardinality_cap,
+		0.5, 0.0, 1.0,
 		NULL, NULL, NULL
 	},
 
