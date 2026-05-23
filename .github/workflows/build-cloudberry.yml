@@ -1487,10 +1487,16 @@ jobs:
           # 2. Follow the same pattern as optimizer
           # 3. Update matrix entries to include the new setting
 
-          # Set PostgreSQL options if defined
+          # Set PostgreSQL options from pg_settings matrix
           PG_OPTS=""
-          if [[ "${{ matrix.pg_settings.optimizer != '' }}" == "true" ]]; then
-            PG_OPTS="$PG_OPTS -c optimizer=${{ matrix.pg_settings.optimizer }}"
+          PG_SETTINGS_JSON='${{ toJson(matrix.pg_settings) }}'
+          if [[ "$PG_SETTINGS_JSON" != "null" && "$PG_SETTINGS_JSON" != "" ]]; then
+            while IFS= read -r line; do
+              # Extract key and value from JSON lines like: "key": "value"
+              if [[ "$line" =~ \"([^\"]+)\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
+                PG_OPTS="$PG_OPTS -c ${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
+              fi
+            done <<< "$PG_SETTINGS_JSON"
           fi
 
           # Create extension if required
@@ -1515,10 +1521,6 @@ jobs:
                 exit 1
                 ;;
             esac
-          fi
-
-          if [[ "${{ matrix.pg_settings.default_table_access_method != '' }}" == "true" ]]; then
-            PG_OPTS="$PG_OPTS -c default_table_access_method=${{ matrix.pg_settings.default_table_access_method }}"
           fi
 
           # Read configs into array

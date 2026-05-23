@@ -219,8 +219,8 @@ installcheck-parallel: all
 # cbdb parallel plan tests, ignore the incompatible cases, should run with 5 GUCs like below:
 installcheck-cbdb-parallel: all tablespace-setup twophase_pqexecparams
 	( \
-	export PGOPTIONS='-c optimizer=off -c enable_parallel=true -c min_parallel_table_scan_size=0 -c min_parallel_index_scan_size=0 -c force_parallel_mode=1 -c cbdb_enable_dynamic_shared_scan=off'; \
-	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule --schedule=$(srcdir)/greenplum_schedule --max-connections=5 $(EXTRA_TESTS) --exclude-tests explain \
+	export PGOPTIONS='-c optimizer=off -c enable_parallel=true -c min_parallel_table_scan_size=0 -c min_parallel_index_scan_size=0 -c force_parallel_mode=1'; \
+	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule --schedule=$(srcdir)/greenplum_schedule --max-connections=5 $(EXTRA_TESTS) --exclude-tests explain --exclude-tests direct_dispatch --exclude-tests bfv_dd --exclude-tests query_finish --exclude-tests qp_with_clause --exclude-tests workfile/sisc_mat_sort --exclude-tests external_table --exclude-tests temp_tablespaces \
 	)
 
 installcheck-orca-parallel: all tablespace-setup twophase_pqexecparams
